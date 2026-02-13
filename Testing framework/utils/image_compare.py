@@ -205,13 +205,16 @@ def compare_images(figma_path, stage_path, out_dir, **kwargs):
     pixel_threshold = kwargs.get("pixel_threshold", None)
     
     if pixel_threshold is not None:
-         # User provided custom threshold
-         diff_thresh_val = int(pixel_threshold)
-         # Default min_area based on noise_tolerance if not specified? 
-         # Let's keep min_area linked to noise_tolerance for now or pick a reasonable default
-         if noise_tolerance == "strict": min_area_val = 50
-         elif noise_tolerance == "relaxed": min_area_val = 800
-         else: min_area_val = 250
+        # User provided custom threshold
+        diff_thresh_val = int(pixel_threshold)
+        # Default min_area based on noise_tolerance if not specified? 
+        # Let's keep min_area linked to noise_tolerance for now or pick a reasonable default
+        if noise_tolerance == "strict":
+            min_area_val = 50
+        elif noise_tolerance == "relaxed":
+            min_area_val = 800
+        else:
+            min_area_val = 250
     elif noise_tolerance == "strict":
         diff_thresh_val = 30
         min_area_val = 50  # Increased to ignore small font rendering differences

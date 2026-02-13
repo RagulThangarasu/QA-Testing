@@ -3300,5 +3300,101 @@
     "error": null,
     "figma_path": "/Users/ragul/Desktop/QA-Testing/Testing framework/runs/61697ad9/figma.png",
     "created_at": "2026-02-13T06:09:48.992794"
+  },
+  "eadceb3e": {
+    "id": "eadceb3e",
+    "type": "comprehensive_audit",
+    "url": "https://hashouttech.com/insights/",
+    "status": "completed",
+    "step": "Done",
+    "progress": 100,
+    "created_at": "2026-02-13T06:25:39.192520",
+    "result": {
+      "summary": {
+        "total_pages": 20,
+        "total_broken_links": 0,
+        "total_accessibility_issues": 70,
+        "avg_seo_score": 100.0
+      },
+      "pdf_report": "full_audit_report.pdf",
+      "broken_links_count": 0,
+      "accessibility_issues_count": 70
+    }
+  },
+  "99b813f2": {
+    "job_id": "99b813f2",
+    "type": "accessibility_sitemap",
+    "page_url": "https://hashouttech.com/sitemap.xml",
+    "wcag_level": "WCAG2AAA",
+    "status": "completed",
+    "progress": 100,
+    "step": "Done",
+    "timestamp": "2026-02-13T06:26:23.932948",
+    "result": {
+      "total_issues": 96,
+      "violations": 36,
+      "warnings": 60,
+      "notices": 0,
+      "report_url": "/download/99b813f2/accessibility_report.pdf"
+    },
+    "created_at": "2026-02-13T06:26:23.935227"
+  },
+  "d9729d1b": {
+    "job_id": "d9729d1b",
+    "type": "accessibility_sitemap",
+    "page_url": "https://hashouttech.com/sitemap.xml",
+    "wcag_level": "WCAG2AA",
+    "status": "completed",
+    "progress": 100,
+    "step": "Done",
+    "timestamp": "2026-02-13T06:27:59.176558",
+    "result": {
+      "total_issues": 96,
+      "violations": 36,
+      "warnings": 60,
+      "notices": 0,
+      "report_url": "/download/d9729d1b/accessibility_report.pdf"
+    },
+    "created_at": "2026-02-13T06:27:59.178660"
+  },
+  "78ded8b8": {
+    "id": "78ded8b8",
+    "type": "comprehensive_audit",
+    "url": "https://hashouttech.com/",
+    "status": "failed",
+    "step": "Failed",
+    "progress": 80,
+    "created_at": "2026-02-13T06:39:20.354931",
+    "error": "'NoneType' object has no attribute 'split'"
+  },
+  "da9afec3": {
+    "id": "da9afec3",
+    "type": "comprehensive_audit",
+    "url": "https://hashouttech.com/",
+    "status": "failed",
+    "step": "Failed",
+    "progress": 80,
+    "created_at": "2026-02-13T06:45:00.521857",
+    "error": "'NoneType' object has no attribute 'split'"
+  },
+  "abfe8a04": {
+    "id": "abfe8a04",
+    "type": "comprehensive_audit",
+    "url": "https://hashouttech.com/",
+    "status": "completed",
+    "step": "Done",
+    "progress": 100,
+    "created_at": "2026-02-13T06:47:45.244684",
+    "result": {
+      "summary": {
+        "total_pages": 7,
+        "total_broken_links": 16,
+        "total_accessibility_issues": 44,
+        "avg_seo_score": 100.0
+      },
+      "pdf_report": "full_audit_report.pdf",
+      "broken_links_count": 16,
+      "accessibility_issues_count": 44
+    }
   }
 }
