@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>SEO & Performance Testing</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/header.css" />
+    <link rel="stylesheet" href="/static/loader.css" />
+    <link rel="stylesheet" href="/static/file_upload.css" />
+    <link rel="stylesheet" href="/static/toggle.css" />
+</head>
+
+<body>
+    <header>
+        <nav>
+            <a href="/">Visual Testing</a>
+            <a href="/broken-links">Broken Links</a>
+            <a href="/accessibility">Accessibility</a>
+            <a href="/seo-performance" class="active">SEO & Performance</a>
+            <button id="nav-jira" class="btn-secondary"
+                style="font-size: 14px; padding: 6px 12px; cursor: pointer; border: 1px solid #374151; background: #1f2937; color: #fff; margin-left: 20px;">Jira
+                Config</button>
+        </nav>
+    </header>
+    <main class="container">
+        <div id="view-run">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <div>
+                    <h1 style="margin: 0;">SEO & Performance Testing</h1>
+                    <p style="color: var(--muted); margin-top: 5px; margin-bottom: 0;">
+                        Analyze your website's SEO optimization and performance metrics.
+                    </p>
+                </div>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <a href="#" id="btn-clear" class="btn-reject"
+                        style="text-decoration: none; font-size: 14px; padding: 6px 12px;">Clear</a>
+                    <a href="#" id="nav-history"
+                        style="color: var(--accent); text-decoration: none; font-weight: 500;">History &rarr;</a>
+                </div>
+            </div>
+
+            <form id="seoPerformanceForm">
+                <div class="toggle-switch" style="gap: 5px;">
+                    <label>
+                        <input type="radio" name="inputType" value="url" checked onchange="toggleInputType()">
+                        Single Page URL
+                    </label>
+                    <label>
+                        <input type="radio" name="inputType" value="file" onchange="toggleInputType()">
+                        Upload Excel/CSV
+                    </label>
+                </div>
+
+                <div id="urlInputContainer">
+                    <label>Page URL
+                        <input type="url" id="url" name="page_url" placeholder="https://example.com/page" />
+                    </label>
+                </div>
+
+                <div id="fileInputContainer" class="hidden">
+                    <label>Upload Excel/CSV File</label>
+                    <div class="file-upload-wrapper" id="drop-zone">
+                        <input type="file" id="file" name="file" accept=".xlsx, .xls, .csv" />
+                        <div class="file-upload-content">
+                            <span class="file-upload-icon">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                </svg>
+                            </span>
+                            <div id="file-text" class="file-upload-text">Click or Drop file here</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <label>Test Type
+                        <select name="test_type" id="test_type">
+                            <option value="both" selected>SEO & Performance</option>
+                            <option value="seo">SEO Only</option>
+                            <option value="performance">Performance Only</option>
+                        </select>
+                    </label>
+
+                    <label>Device Type
+                        <select name="device_type" id="device_type">
+                            <option value="desktop" selected>Desktop</option>
+                            <option value="mobile">Mobile</option>
+                        </select>
+                    </label>
+                </div>
+
+                <button type="submit">Run Analysis</button>
+            </form>
+
+            <div id="loader" class="loader-container hidden">
+                <div class="progress-bar-bg">
+                    <div id="progressFill" class="progress-bar-fill"></div>
+                </div>
+                <div id="statusText" class="status-text">0% - Starting...</div>
+            </div>
+            <div id="results" class="hidden" style="margin-top: 20px;"></div>
+        </div>
+
+        <div id="view-history" class="hidden">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h1 style="margin: 0;">SEO & Performance History</h1>
+                <a href="#" id="nav-run" style="color: var(--accent); text-decoration: none; font-weight: 500;">&larr;
+                    Back to Testing</a>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th width="40"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"></th>
+                        <th>Date</th>
+                        <th>URL</th>
+                        <th>Type</th>
+                        <th>SEO Score</th>
+                        <th>Performance</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="history-list"></tbody>
+            </table>
+            <div id="pagination"
+                style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;"></div>
+        </div>
+
+        <div id="toast" class="toast hidden"></div>
+
+        <!-- Modals -->
+        <div id="jira-config-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Jira Configuration</h3>
+                <label>Server URL <input type="text" id="jira-server"
+                        placeholder="https://your-domain.atlassian.net"></label>
+                <label>Email <input type="email" id="jira-email" placeholder="email@example.com"></label>
+                <label>API Token <input type="password" id="jira-token" placeholder="API Token"></label>
+                <label>Project Key <input type="text" id="jira-project" placeholder="PROJ"></label>
+                <div class="modal-actions">
+                    <button id="btnSaveJira">Save & Test</button>
+                    <button onclick="document.getElementById('jira-config-modal').classList.add('hidden')"
+                        class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="jira-report-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Report to Jira</h3>
+                <label>Summary <input type="text" id="jira-summary"></label>
+                <label>Description <textarea id="jira-desc" rows="5"></textarea></label>
+                <div class="modal-actions">
+                    <button id="btnSendJira">Create Issue</button>
+                    <button onclick="document.getElementById('jira-report-modal').classList.add('hidden')"
+                        class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/seo_performance.js"></script>
+    <script src="/static/jira_integration.js"></script>
+</body>
+
+</html>
