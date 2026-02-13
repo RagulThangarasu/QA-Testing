@@ -1,4 +1,9 @@
 .venv/
 __pycache__/
 runs/
+runs.json
+*.log
 *.pyc
+.DS_Store
+.idea/
+.vscode/
