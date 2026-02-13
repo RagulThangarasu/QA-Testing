@@ -60,6 +60,11 @@ def compare():
         threshold = 0.85
 
     noise_tolerance = request.form.get("noise_tolerance", "medium")
+    pixel_threshold = request.form.get("pixel_threshold", None)
+    if pixel_threshold and pixel_threshold.isdigit():
+        pixel_threshold = int(pixel_threshold)
+    else:
+        pixel_threshold = None
 
     job_id = str(uuid.uuid4())[:8]
     job_dir = os.path.join(RUNS_DIR, job_id)
@@ -83,7 +88,7 @@ def compare():
     store.save_job(job_id, job_data)
 
     # Start background thread
-    thread = threading.Thread(target=process_comparison, args=(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors, wait_time, highlight_diffs))
+    thread = threading.Thread(target=process_comparison, args=(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors, wait_time, highlight_diffs, pixel_threshold))
     thread.start()
 
     return jsonify({"job_id": job_id})
@@ -256,7 +261,7 @@ def delete_broken_links_history():
 
 
 
-def process_comparison(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors_str="", wait_time=1000, highlight_diffs=True):
+def process_comparison(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors_str="", wait_time=1000, highlight_diffs=True, pixel_threshold=None):
     try:
         # 1) Screenshot
         store.save_job(job_id, {"step": "Capturing screenshot...", "progress": 10})
@@ -283,7 +288,7 @@ def process_comparison(job_id, figma_path, stage_url, viewport, fullpage, thresh
 
         # 2) Compare
         try:
-            result = compare_images(figma_path, stage_path, job_dir, noise_tolerance=noise_tolerance, highlight_diffs=highlight_diffs)
+            result = compare_images(figma_path, stage_path, job_dir, noise_tolerance=noise_tolerance, highlight_diffs=highlight_diffs, pixel_threshold=pixel_threshold)
         except Exception as e:
             raise Exception(f"Comparison failed: {e}")
             

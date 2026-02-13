@@ -103,6 +103,37 @@
             </div>
 
             <div style="margin-top: 15px;">
+              <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-weight: 500;">
+                <input type="checkbox" id="enable_pixel_threshold" onchange="togglePixelThreshold(this)">
+                Custom Pixel Validation Threshold
+              </label>
+              <div id="pixel_threshold_container"
+                style="display: flex; align-items: center; gap: 10px; opacity: 0.5; pointer-events: none;">
+                <input type="range" name="pixel_threshold" id="pixel_threshold" min="0" max="255" value="60" disabled
+                  oninput="document.getElementById('pixel_val').innerText = this.value">
+                <span id="pixel_val" style="font-family: monospace;">60</span>
+                <span style="font-size: 0.8em; color: #666;">(0 = Strict, 255 = Loose)</span>
+              </div>
+            </div>
+
+            <script>
+              function togglePixelThreshold(checkbox) {
+                const container = document.getElementById('pixel_threshold_container');
+                const input = document.getElementById('pixel_threshold');
+                if (checkbox.checked) {
+                  container.style.opacity = '1';
+                  container.style.pointerEvents = 'auto';
+                  input.disabled = false;
+                } else {
+                  container.style.opacity = '0.5';
+                  container.style.pointerEvents = 'none';
+                  input.disabled = true;
+                }
+              }
+            </script>
+
+
+            <div style="margin-top: 15px;">
               <label style="display: flex; align-items: center; cursor: pointer;">
                 <input type="checkbox" name="highlight_diffs" checked style="margin-right: 8px; transform: scale(1.2);">
                 <span style="font-weight: 500;">Highlight Differences</span>
