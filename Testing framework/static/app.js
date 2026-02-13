@@ -65,6 +65,9 @@ form.addEventListener("submit", async (e) => {
   // User requested removal of fullpage toggle, defaulting to true in backend/assuming fullpage desirable.
   // fd.set('fullpage', 'true'); // Optional, backend defaults to true anyway.
 
+  const enablePixelThreshold = document.getElementById("enable_pixel_threshold").checked;
+  fd.set("enable_pixel_threshold", enablePixelThreshold ? "true" : "false");
+
   try {
     const res = await fetch("/api/compare", { method: "POST", body: fd });
     const data = await res.json();

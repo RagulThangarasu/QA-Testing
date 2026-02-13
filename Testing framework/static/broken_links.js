@@ -90,7 +90,7 @@ async function loadHistory(page = 1) {
                 <tr>
                     <td><input type="checkbox" class="history-checkbox" value="${job.job_id}"></td>
                     <td>${date}</td>
-                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${job.stage_url}">${job.stage_url}</td>
+                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${job.stage_url || job.url}">${job.stage_url || job.url}</td>
                     <td>${checkTypeLabel}</td>
                     <td style="color: ${issuesCount > 0 ? 'var(--error)' : '#4effa0'}">${issuesCount}</td>
                     <td>

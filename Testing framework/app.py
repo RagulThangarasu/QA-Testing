@@ -60,8 +60,11 @@ def compare():
         threshold = 0.85
 
     noise_tolerance = request.form.get("noise_tolerance", "medium")
+    
+    enable_pixel_threshold = request.form.get("enable_pixel_threshold") == "true"
     pixel_threshold = request.form.get("pixel_threshold", None)
-    if pixel_threshold and pixel_threshold.isdigit():
+    
+    if enable_pixel_threshold and pixel_threshold and pixel_threshold.isdigit():
         pixel_threshold = int(pixel_threshold)
     else:
         pixel_threshold = None
@@ -214,8 +217,8 @@ def process_broken_links(job_id, stage_url, check_type, job_dir):
 @app.get("/api/broken-links/history")
 def get_broken_links_history():
     jobs = store.list_jobs()
-    # Filter only broken_links jobs
-    broken_links_jobs = [j for j in jobs if j.get("type") == "broken_links"]
+    # Filter only broken_links jobs (and legacy comprehensive_audit)
+    broken_links_jobs = [j for j in jobs if j.get("type") in ["broken_links", "comprehensive_audit"]]
     
     # Pagination
     try:
@@ -758,7 +761,8 @@ def process_accessibility_sitemap(job_id, sitemap_url, wcag_level, job_dir):
 @app.get("/api/accessibility/history")
 def get_accessibility_history():
     jobs = store.list_jobs()
-    accessibility_jobs = [j for j in jobs if j.get("type") == "accessibility"]
+    # Include sitemap jobs
+    accessibility_jobs = [j for j in jobs if j.get("type") in ["accessibility", "accessibility_sitemap"]]
     
     # Pagination
     try:
