@@ -67,12 +67,15 @@ def _align_orb(template_bgr, target_bgr):
     src_pts = np.float32([kps1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
     dst_pts = np.float32([kps2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
 
-    H, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC, 5.0)
-    if H is None:
-        return cv2.resize(target_bgr, (template_bgr.shape[1], template_bgr.shape[0])), None
+    # Use partial affine (rotation, scale, translation) to prevent perspective skew/distortion
+    # limiting degrees of freedom is safer for screenshots
+    M, mask = cv2.estimateAffinePartial2D(dst_pts, src_pts, method=cv2.RANSAC, ransacReprojThreshold=5.0)
+    
+    if M is None:
+         return cv2.resize(target_bgr, (template_bgr.shape[1], template_bgr.shape[0])), None
 
-    aligned = cv2.warpPerspective(target_bgr, H, (template_bgr.shape[1], template_bgr.shape[0]), flags=cv2.INTER_LINEAR)
-    return aligned, H
+    aligned = cv2.warpAffine(target_bgr, M, (template_bgr.shape[1], template_bgr.shape[0]), flags=cv2.INTER_LINEAR)
+    return aligned, M
 
 
 def _draw_regions(base_bgr, regions, color=(0, 0, 255), thickness=2):
