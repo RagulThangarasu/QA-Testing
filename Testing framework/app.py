@@ -815,12 +815,14 @@ def run_seo_performance_test():
         page_url = data.get("page_url")
         test_type = data.get("test_type", "both")
         device_type = data.get("device_type", "desktop")
+        api_key = data.get("api_key", "").strip() or None
         file = None
     else:
         # FormData
         page_url = request.form.get("page_url")
         test_type = request.form.get("test_type", "both")
         device_type = request.form.get("device_type", "desktop")
+        api_key = request.form.get("api_key", "").strip() or None
         file = request.files.get("file")
 
     job_id = str(uuid.uuid4())[:8]
@@ -847,7 +849,7 @@ def run_seo_performance_test():
         store.save_job(job_id, job_data)
         
         thread = threading.Thread(target=process_seo_performance_batch, 
-                                 args=(job_id, file_path, test_type, device_type, job_dir))
+                                 args=(job_id, file_path, test_type, device_type, job_dir, api_key))
         thread.start()
         
     elif page_url:
@@ -866,7 +868,7 @@ def run_seo_performance_test():
         store.save_job(job_id, job_data)
         
         thread = threading.Thread(target=process_seo_performance_test, 
-                                 args=(job_id, page_url, test_type, device_type, job_dir))
+                                 args=(job_id, page_url, test_type, device_type, job_dir, api_key))
         thread.start()
     else:
          return jsonify({"error": "Either page_url or file upload is required"}), 400
@@ -874,16 +876,18 @@ def run_seo_performance_test():
     return jsonify({"job_id": job_id})
 
 
-PAGESPEED_API_KEY = "AQ.Ab8RN6LqPcRhvDARslBESVOIOfYXnm8Rrk__dCPNYuoYhAjGFw"
+PAGESPEED_API_KEY = os.environ.get("PAGESPEED_API_KEY") # Use env var or None
 
-def process_seo_performance_test(job_id, page_url, test_type, device_type, job_dir):
+def process_seo_performance_test(job_id, page_url, test_type, device_type, job_dir, api_key=None):
     try:
         from utils.pagespeed import PageSpeedInsights
         
         store.save_job(job_id, {"step": "Connecting to PageSpeed Insights...", "progress": 10})
         
         # Initialize PageSpeed Insights API
-        psi = PageSpeedInsights(api_key=PAGESPEED_API_KEY)
+        # Use user-provided key, or fallback to global/env key
+        key_to_use = api_key or PAGESPEED_API_KEY
+        psi = PageSpeedInsights(api_key=key_to_use)
         
         # Determine which categories to analyze
         categories = []
@@ -940,7 +944,7 @@ def process_seo_performance_test(job_id, page_url, test_type, device_type, job_d
         store.save_job(job_id, {"status": "failed", "error": error_details})
 
 
-def process_seo_performance_batch(job_id, file_path, test_type, device_type, job_dir):
+def process_seo_performance_batch(job_id, file_path, test_type, device_type, job_dir, api_key=None):
     import pandas as pd
     from utils.pagespeed import PageSpeedInsights
     import traceback
@@ -972,7 +976,8 @@ def process_seo_performance_batch(job_id, file_path, test_type, device_type, job
             
         store.save_job(job_id, {"step": f"Found {total_urls} URLs to process...", "progress": 10})
         
-        psi = PageSpeedInsights(api_key=PAGESPEED_API_KEY)
+        key_to_use = api_key or PAGESPEED_API_KEY
+        psi = PageSpeedInsights(api_key=key_to_use)
         
         # Determine categories
         categories = []

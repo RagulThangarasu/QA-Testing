@@ -87,18 +87,46 @@ async function loadHistory(page = 1) {
             const testType = job.test_type || "both";
             const testTypeLabel = testType === "both" ? "SEO & Performance" :
                 testType === "seo" ? "SEO Only" : "Performance Only";
-            const seoScore = job.result?.seo_score || "-";
-            const perfScore = job.result?.performance_score || "-";
+
+            // Handle display name (URL or Filename)
+            let displayName = job.page_url;
+            if (!displayName && job.file_name) {
+                displayName = `📄 ${job.file_name}`;
+            }
+            if (!displayName) displayName = "Unknown";
+
+            // Handle Scores / Status
+            let col1 = "-";
+            let col2 = "-";
+
+            if (job.status === 'failed') {
+                col1 = `<span style="color: var(--error);">Failed</span>`;
+            } else if (job.result?.total_processed !== undefined) {
+                // Batch Job
+                col1 = `<span style="color: var(--accent);">Batch (${job.result.total_processed} URLs)</span>`;
+            } else {
+                // Single Page Job
+                const seoScore = job.result?.seo_score;
+                const perfScore = job.result?.performance_score;
+
+                if (seoScore !== undefined && seoScore !== null) {
+                    col1 = `<span style="color: ${getScoreColor(seoScore)}">${seoScore}/100</span>`;
+                }
+                if (perfScore !== undefined && perfScore !== null) {
+                    col2 = `<span style="color: ${getScoreColor(perfScore)}">${perfScore}/100</span>`;
+                }
+            }
+
             const reportUrl = job.result?.report_url || "";
 
             return `
                 <tr>
                     <td><input type="checkbox" class="history-checkbox" value="${job.job_id}"></td>
                     <td>${date}</td>
-                    <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${job.page_url}">${job.page_url}</td>
+                    <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${displayName}">${displayName}</td>
                     <td>${testTypeLabel}</td>
-                    <td style="color: ${getScoreColor(seoScore)}">${seoScore !== "-" ? seoScore + "/100" : "-"}</td>
-                    <td style="color: ${getScoreColor(perfScore)}">${perfScore !== "-" ? perfScore + "/100" : "-"}</td>
+                    <td>${col1}</td>
+                    <td>${col2}</td>
                     <td>
                         ${reportUrl ? `<a href="${reportUrl}" class="btn-secondary" style="padding: 5px 10px; font-size: 12px;">Download</a>` : '-'}
                     </td>
