@@ -48,6 +48,10 @@
                         Single Page URL
                     </label>
                     <label>
+                        <input type="radio" name="inputType" value="sitemap" onchange="toggleInputType()">
+                        Sitemap URL
+                    </label>
+                    <label>
                         <input type="radio" name="inputType" value="file" onchange="toggleInputType()">
                         Upload Excel/CSV
                     </label>
@@ -56,6 +60,13 @@
                 <div id="urlInputContainer">
                     <label>Page URL
                         <input type="url" id="url" name="page_url" placeholder="https://example.com/page" />
+                    </label>
+                </div>
+
+                <div id="sitemapInputContainer" class="hidden">
+                    <label>Sitemap URL
+                        <input type="url" id="sitemap_url" name="sitemap_url"
+                            placeholder="https://example.com/sitemap.xml" />
                     </label>
                 </div>
 
@@ -130,7 +141,8 @@
                         <th>Type</th>
                         <th>SEO Score</th>
                         <th>Performance</th>
-                        <th>Actions</th>
+                        <th>Excel</th>
+                        <th>PDF</th>
                     </tr>
                 </thead>
                 <tbody id="history-list"></tbody>
@@ -172,7 +184,7 @@
         </div>
     </main>
 
-    <script src="/static/seo_performance.js"></script>
+    <script src="/static/seo_performance.js?v=2"></script>
     <script src="/static/jira_integration.js"></script>
 </body>
 

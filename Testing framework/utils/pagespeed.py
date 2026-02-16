@@ -37,9 +37,9 @@ class PageSpeedInsights:
             'strategy': strategy
         }
         
+        
         # Add categories
-        for category in categories:
-            params[f'category'] = category
+        params['category'] = categories
         
         # Add API key if available
         if self.api_key:
@@ -110,60 +110,93 @@ class PageSpeedInsights:
         
         performance_details = []
         
-        # Core Web Vitals
-        if 'first-contentful-paint' in audits:
-            fcp = audits['first-contentful-paint']
-            performance_details.append({
-                'name': 'First Contentful Paint (FCP)',
-                'value': fcp.get('displayValue', 'N/A'),
-                'threshold': 1.8,
-                'score': fcp.get('score', 0)
-            })
+        # Core Web Vitals & Metrics
+        # FCP
+        fcp = audits.get('first-contentful-paint', {})
+        performance_details.append({
+            'id': 'first-contentful-paint', # Add ID for lookup
+            'name': 'First Contentful Paint (FCP)',
+            'displayValue': fcp.get('displayValue', 'N/A'),
+            'score': fcp.get('score', 0)
+        })
         
-        if 'largest-contentful-paint' in audits:
-            lcp = audits['largest-contentful-paint']
-            performance_details.append({
-                'name': 'Largest Contentful Paint (LCP)',
-                'value': lcp.get('displayValue', 'N/A'),
-                'threshold': 2.5,
-                'score': lcp.get('score', 0)
-            })
+        # LCP
+        lcp = audits.get('largest-contentful-paint', {})
+        performance_details.append({
+            'id': 'largest-contentful-paint',
+            'name': 'Largest Contentful Paint (LCP)',
+            'displayValue': lcp.get('displayValue', 'N/A'),
+            'score': lcp.get('score', 0)
+        })
         
-        if 'interactive' in audits:
-            tti = audits['interactive']
-            performance_details.append({
-                'name': 'Time to Interactive (TTI)',
-                'value': tti.get('displayValue', 'N/A'),
-                'threshold': 3.8,
-                'score': tti.get('score', 0)
-            })
+        # CLS
+        cls = audits.get('cumulative-layout-shift', {})
+        performance_details.append({
+            'id': 'cumulative-layout-shift',
+            'name': 'Cumulative Layout Shift (CLS)',
+            'displayValue': cls.get('displayValue', 'N/A'),
+            'score': cls.get('score', 0)
+        })
+
+        # TTI
+        tti = audits.get('interactive', {})
+        performance_details.append({
+            'id': 'interactive',
+            'name': 'Time to Interactive (TTI)',
+            'displayValue': tti.get('displayValue', 'N/A'),
+            'score': tti.get('score', 0)
+        })
         
-        if 'total-blocking-time' in audits:
-            tbt = audits['total-blocking-time']
-            performance_details.append({
-                'name': 'Total Blocking Time (TBT)',
-                'value': tbt.get('displayValue', 'N/A'),
-                'threshold': 200,
-                'score': tbt.get('score', 0)
-            })
+        # TBT
+        tbt = audits.get('total-blocking-time', {})
+        performance_details.append({
+            'id': 'total-blocking-time',
+            'name': 'Total Blocking Time (TBT)',
+            'displayValue': tbt.get('displayValue', 'N/A'),
+            'score': tbt.get('score', 0)
+        })
         
-        if 'cumulative-layout-shift' in audits:
-            cls = audits['cumulative-layout-shift']
-            performance_details.append({
-                'name': 'Cumulative Layout Shift (CLS)',
-                'value': cls.get('displayValue', 'N/A'),
-                'threshold': 0.1,
-                'score': cls.get('score', 0)
-            })
+        # Speed Index
+        si = audits.get('speed-index', {})
+        performance_details.append({
+            'id': 'speed-index',
+            'name': 'Speed Index',
+            'displayValue': si.get('displayValue', 'N/A'),
+            'score': si.get('score', 0)
+        })
+
+        # TTFB (Time to First Byte)
+        # Audit ID: server-response-time
+        ttfb = audits.get('server-response-time', {})
+        performance_details.append({
+            'id': 'server-response-time',
+            'name': 'Time to First Byte (TTFB)',
+            'displayValue': ttfb.get('displayValue', 'N/A'),
+            'score': ttfb.get('score', 0)
+        })
+
+        # Core Web Vitals (Field Data) - FID (First Input Delay)
+        # Usually found in loadingExperience from CrUX data
+        loading_experience = data.get('loadingExperience', {})
+        metrics_crux = loading_experience.get('metrics', {})
         
-        if 'speed-index' in audits:
-            si = audits['speed-index']
-            performance_details.append({
-                'name': 'Speed Index',
-                'value': si.get('displayValue', 'N/A'),
-                'threshold': 3.4,
-                'score': si.get('score', 0)
+        if 'FIRST_INPUT_DELAY_MS' in metrics_crux:
+            fid_metric = metrics_crux['FIRST_INPUT_DELAY_MS']
+            # Format: { percentile: 13, distributions: [...], category: 'FAST' }
+            fid_val = fid_metric.get('percentile', 0)
+            fid_category = fid_metric.get('category', 'UNKNOWN')
+            
+            # Add to details
+            performance_details.insert(0, { # Insert at top or near relevant metrics
+                'id': 'first-input-delay',
+                'name': 'First Input Delay (FID)',
+                'displayValue': f"{fid_val} ms",
+                'score': 1 if fid_category == 'FAST' else (0.5 if fid_category == 'AVERAGE' else 0),
+                'is_field_data': True
             })
+        else:
+            # If no Field Data, usually use TBT as proxy for Lab
+            pass
         
         # Extract SEO details
         seo_details = []
@@ -185,7 +218,7 @@ class PageSpeedInsights:
                 audit = audits[audit_key]
                 seo_details.append({
                     'name': audit_name,
-                    'passed': audit.get('score', 0) >= 0.9,
+                    'passed': (audit.get('score') or 0) >= 0.9,
                     'details': audit.get('title', 'N/A')
                 })
         

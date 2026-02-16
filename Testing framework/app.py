@@ -13,7 +13,12 @@ os.makedirs(RUNS_DIR, exist_ok=True)
 
 ALLOWED_EXT = {"png"}
 
+
 from utils.store import store
+from utils.baseline_store import BaselineStore
+
+baseline_store = BaselineStore(data_dir=os.path.join(RUNS_DIR, "baselines"), metadata_file=os.path.join(RUNS_DIR, "baselines.json"))
+
 
 
 
@@ -30,16 +35,35 @@ def compare():
       - fullpage: "true"/"false" (optional)
       - threshold: float 0..1 (optional)
     """
-    if "figma_png" not in request.files:
-        return jsonify({"error": "figma_png is required"}), 400
-
-    file = request.files["figma_png"]
-    if file.filename == "" or not allowed_file(file.filename):
-        return jsonify({"error": "Please upload a PNG file"}), 400
-
     stage_url = request.form.get("stage_url", "").strip()
     if not stage_url.startswith("http"):
         return jsonify({"error": "Valid stage_url (http/https) is required"}), 400
+
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = os.path.join(RUNS_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+    
+    # Save stage_url in job data immediately so it's available for approval
+    store.save_job(job_id, {"status": "starting", "progress": 0, "step": "Initializing", "stage_url": stage_url})
+
+    import shutil
+    figma_path = os.path.join(job_dir, "figma.png")
+    uploaded_file = request.files.get("figma_png")
+
+    if not uploaded_file or uploaded_file.filename == "":
+        # No file - try to use stored baseline
+        baseline_path = baseline_store.get_active_baseline_path(stage_url)
+        if baseline_path and os.path.exists(baseline_path):
+            shutil.copy2(baseline_path, figma_path)
+            reference_source = "baseline"
+        else:
+            return jsonify({"error": "No baseline image uploaded and no active baseline found for this URL."}), 400
+    else:
+        # File uploaded - save it
+        if not allowed_file(uploaded_file.filename):
+             return jsonify({"error": "Please upload a PNG file"}), 400
+        uploaded_file.save(figma_path)
+        reference_source = "upload"
 
     viewport = request.form.get("viewport", "desktop")
     fullpage = request.form.get("fullpage", "true").lower() == "true"
@@ -69,12 +93,7 @@ def compare():
     else:
         pixel_threshold = None
 
-    job_id = str(uuid.uuid4())[:8]
-    job_dir = os.path.join(RUNS_DIR, job_id)
-    os.makedirs(job_dir, exist_ok=True)
-
-    figma_path = os.path.join(job_dir, "figma.png")
-    file.save(figma_path)
+    component_selector = request.form.get("component_selector", "").strip() or None
 
     # Initialize job status
     job_data = {
@@ -86,12 +105,16 @@ def compare():
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "result": None,
         "error": None,
-        "figma_path": figma_path
+        "stage_url": stage_url,
+        "stage_url": stage_url,
+        "figma_path": figma_path,
+        "reference_source": reference_source
     }
     store.save_job(job_id, job_data)
 
+
     # Start background thread
-    thread = threading.Thread(target=process_comparison, args=(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors, wait_time, highlight_diffs, pixel_threshold))
+    thread = threading.Thread(target=process_comparison, args=(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors, wait_time, highlight_diffs, pixel_threshold, component_selector))
     thread.start()
 
     return jsonify({"job_id": job_id})
@@ -264,7 +287,7 @@ def delete_broken_links_history():
 
 
 
-def process_comparison(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors_str="", wait_time=1000, highlight_diffs=True, pixel_threshold=None):
+def process_comparison(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors_str="", wait_time=1000, highlight_diffs=True, pixel_threshold=None, component_selector=None):
     try:
         # 1) Screenshot
         store.save_job(job_id, {"step": "Capturing screenshot...", "progress": 10})
@@ -283,7 +306,8 @@ def process_comparison(job_id, figma_path, stage_url, viewport, fullpage, thresh
                               viewport=viewport, 
                               fullpage=fullpage, 
                               mask_selectors=mask_selectors,
-                              wait_time=wait_time)
+                              wait_time=wait_time,
+                              selector=component_selector)
         except Exception as e:
             raise Exception(f"Screenshot failed: {e}")
         
@@ -356,7 +380,75 @@ def approve_job(job_id):
     
     # Store approval status
     store.save_job(job_id, {"approved": True, "reviewed_at": datetime.datetime.utcnow().isoformat()})
+    
+    # Also Promote to Baseline
+    # We need the job data to know where the stage image is
+    job_dir = os.path.join(RUNS_DIR, job_id)
+    stage_path = os.path.join(job_dir, "stage.png")
+    
+    # We need the original stage URL from the job
+    # But job object from store might not have clean URL if it was just an adhoc run
+    # Let's check job_data
+    if os.path.exists(stage_path):
+        # We need to find the URL this run was for.
+        # It's recorded in the job report usually but maybe not in store metadata explicitly if not added
+        # compare_images stores result in job_dir but we need URL
+        # Let's look at get_job
+        # Wait, compare() saves to store: "stage_url" is NOT saved in initial job_data in compare()!
+        # It is passed to process_comparison but not saved to store initially.
+        # But report building uses it.
+        # Let's fix compare() to save stage_url to job_id so we can retrieve it here.
+        # For now, we'll try to guess or rely on it being there if I add it.
+        # EDIT: I will add stage_url to job_data in compare() in a separate chunk.
+        pass
+
     return jsonify({"success": True, "approved": True})
+
+@app.post("/api/baselines/promote/<job_id>")
+def promote_baseline(job_id):
+    job = store.get_job(job_id)
+    if not job: return jsonify({"error": "Job not found"}), 404
+    
+    stage_url = job.get("stage_url")
+    if not stage_url:
+        return jsonify({"error": "Job does not have a stage_url recorded."}), 400
+        
+    job_dir = os.path.join(RUNS_DIR, job_id)
+    # Use figma.png (the reference/uploaded file) as the new baseline source
+    figma_path = os.path.join(job_dir, "figma.png")
+    
+    if not os.path.exists(figma_path):
+        return jsonify({"error": "Reference image (figma.png) missing."}), 404
+        
+    version_id = baseline_store.add_baseline(stage_url, job_id, figma_path)
+    
+    # Also mark the job as approved since it is now the baseline
+    store.save_job(job_id, {"approved": True, "reviewed_at": datetime.datetime.utcnow().isoformat()})
+
+    if not version_id:
+         return jsonify({"success": True, "message": "Baseline already up to date.", "version_id": "current"})
+    
+    return jsonify({"success": True, "version_id": version_id})
+
+@app.get("/api/baselines")
+def list_baselines():
+    return jsonify(baseline_store.get_all_baselines())
+
+
+@app.post("/api/baselines/rollback")
+def rollback_baseline():
+    data = request.json
+    url = data.get("url")
+    version_id = data.get("version_id")
+    
+    if not url or not version_id:
+        return jsonify({"error": "Missing url or version_id"}), 400
+        
+    success = baseline_store.rollback(url, version_id)
+    if success:
+         return jsonify({"success": True})
+    return jsonify({"error": "Rollback failed"}), 400
+
 
 @app.post("/api/job/<job_id>/reject")
 def reject_job(job_id):
@@ -376,9 +468,19 @@ def get_history():
     # Sort by timestamp (newest first)
     visual_testing_jobs.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     
+    # Filter by approval status if requested
+    filter_status = request.args.get("filter", "all")
+    if filter_status == "pending":
+        visual_testing_jobs = [j for j in visual_testing_jobs if j.get("approved") is None]
+    elif filter_status == "approved":
+        visual_testing_jobs = [j for j in visual_testing_jobs if j.get("approved") is True]
+    elif filter_status == "rejected":
+        visual_testing_jobs = [j for j in visual_testing_jobs if j.get("approved") is False]
+    
     # Pagination
     try:
         page = int(request.args.get("page", 1))
+
         limit = int(request.args.get("limit", 10))
     except ValueError:
         page = 1
@@ -401,18 +503,7 @@ def get_history():
 
 
 
-@app.post("/api/history/delete")
-def delete_history():
-    jobs_to_delete = request.json.get("job_ids", [])
-    for job_id in jobs_to_delete:
-        store.delete_job(job_id)
-        # Optionally cleanup files
-        job_dir = os.path.join(RUNS_DIR, secure_filename(job_id))
-        if os.path.exists(job_dir):
-            import shutil
-            shutil.rmtree(job_dir, ignore_errors=True)
-            
-    return jsonify({"success": True})
+
 
 @app.get("/download/<job_id>/<filename>")
 def download(job_id, filename):
@@ -423,7 +514,46 @@ def download(job_id, filename):
     # Serve inline so <img src> previews work; UI uses download attribute for saving
     return send_file(file_path, as_attachment=False)
 
+@app.get("/api/baselines/image/<filename>")
+def get_baseline_image(filename):
+    path = baseline_store.get_baseline_path(secure_filename(filename))
+    if not path:
+        return jsonify({"error": "Image not found"}), 404
+    return send_file(path)
+
+@app.post("/api/baselines/delete")
+
+def delete_baseline_api(): # Rename to avoid conflict if any
+    data = request.json
+    url = data.get("url")
+    if not url: return jsonify({"error": "Missing URL"}), 400
+    
+    if baseline_store.delete_baseline(url):
+        return jsonify({"success": True})
+    return jsonify({"error": "Baseline not found"}), 404
+
+@app.post("/api/baselines/upload")
+def upload_baseline_api():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    file = request.files["file"]
+    url = request.form.get("url")
+    
+    if not url:
+        return jsonify({"error": "Missing URL"}), 400
+        
+    if file.filename == "":
+        return jsonify({"error": "Empty filename"}), 400
+
+    try:
+        # Create a pseudo-job or just mark as manual
+        version_id = baseline_store.add_baseline_from_file(url, file)
+        return jsonify({"success": True, "version_id": version_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.get("/")
+
 def index():
     return app.send_static_file("index.html")
 
@@ -817,6 +947,7 @@ def run_seo_performance_test():
     if request.content_type and request.content_type.startswith('application/json'):
         data = request.get_json()
         page_url = data.get("page_url")
+        sitemap_url = data.get("sitemap_url")
         test_type = data.get("test_type", "both")
         device_type = data.get("device_type", "desktop")
         api_key = data.get("api_key", "").strip() or None
@@ -827,7 +958,9 @@ def run_seo_performance_test():
         test_type = request.form.get("test_type", "both")
         device_type = request.form.get("device_type", "desktop")
         api_key = request.form.get("api_key", "").strip() or None
+        api_key = request.form.get("api_key", "").strip() or None
         file = request.files.get("file")
+        sitemap_url = request.form.get("sitemap_url")
 
     job_id = str(uuid.uuid4())[:8]
     job_dir = os.path.join(RUNS_DIR, job_id)
@@ -856,6 +989,26 @@ def run_seo_performance_test():
                                  args=(job_id, file_path, test_type, device_type, job_dir, api_key))
         thread.start()
         
+    elif sitemap_url:
+        job_data = {
+            "job_id": job_id,
+            "type": "seo_performance",
+            "input_type": "batch",  # Treat as batch for UI consistency
+            "page_url": sitemap_url, # Store sitemap URL for reference
+            "test_type": test_type,
+            "device_type": device_type,
+            "status": "running",
+            "progress": 0,
+            "step": "Fetching sitemap URLs...",
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "result": None
+        }
+        store.save_job(job_id, job_data)
+        
+        thread = threading.Thread(target=process_seo_performance_sitemap, 
+                                 args=(job_id, sitemap_url, test_type, device_type, job_dir, api_key))
+        thread.start()
+
     elif page_url:
         job_data = {
             "job_id": job_id,
@@ -875,12 +1028,12 @@ def run_seo_performance_test():
                                  args=(job_id, page_url, test_type, device_type, job_dir, api_key))
         thread.start()
     else:
-         return jsonify({"error": "Either page_url or file upload is required"}), 400
+         return jsonify({"error": "Page URL, Sitemap URL, or File upload is required"}), 400
 
     return jsonify({"job_id": job_id})
 
 
-PAGESPEED_API_KEY = os.environ.get("PAGESPEED_API_KEY") # Use env var or None
+PAGESPEED_API_KEY = os.environ.get("PAGESPEED_API_KEY", "AIzaSyCETduV3lTJKEGn_JTjfXDuN5ZH19fMrtw") # Use env var or provided default
 
 def process_seo_performance_test(job_id, page_url, test_type, device_type, job_dir, api_key=None):
     try:
@@ -932,6 +1085,8 @@ def process_seo_performance_test(job_id, page_url, test_type, device_type, job_d
             "seo_score": metrics.get('seo_score'),
             "performance_score": metrics.get('performance_score'),
             "load_time": metrics.get('load_time'),
+            "performance_details": metrics.get('performance_details', []),
+            "recommendations": metrics.get('recommendations', []),
             "report_url": f"/download/{job_id}/{os.path.basename(report_path)}"
         }
         
@@ -1024,6 +1179,8 @@ def process_seo_performance_batch(job_id, file_path, test_type, device_type, job
                     "First Contentful Paint": next((audit['displayValue'] for audit in metrics.get('performance_details', []) if audit['id'] == 'first-contentful-paint'), 'N/A'),
                     "Largest Contentful Paint": next((audit['displayValue'] for audit in metrics.get('performance_details', []) if audit['id'] == 'largest-contentful-paint'), 'N/A'),
                     "Cumulative Layout Shift": next((audit['displayValue'] for audit in metrics.get('performance_details', []) if audit['id'] == 'cumulative-layout-shift'), 'N/A'),
+                    "Time to First Byte": next((audit['displayValue'] for audit in metrics.get('performance_details', []) if audit['id'] == 'server-response-time'), 'N/A'),
+                    "First Input Delay": next((audit['displayValue'] for audit in metrics.get('performance_details', []) if audit['id'] == 'first-input-delay'), 'N/A'),
                 }
                 results.append(row)
                 
@@ -1046,6 +1203,217 @@ def process_seo_performance_batch(job_id, file_path, test_type, device_type, job
         final_result = {
             "total_processed": total_urls,
             "report_url": f"/download/{job_id}/{report_filename}"
+        }
+        
+        store.save_job(job_id, {
+            "result": final_result,
+            "status": "completed",
+            "progress": 100,
+            "step": "Done"
+        })
+
+    except Exception as e:
+        error_details = f"{str(e)}\n{traceback.format_exc()}"
+        store.save_job(job_id, {"status": "failed", "error": error_details})
+
+def analyze_single_url_psi(url, psi, strategy, categories):
+    try:
+        if not url.startswith('http'):
+            if not url.startswith('www'):
+                 return {
+                    "URL": url,
+                    "Status": "Skipped (Invalid URL)",
+                    "Error": "URL must start with http/https"
+                }
+            else:
+                url = "https://" + url
+            
+        metrics = psi.analyze(url, strategy=strategy, categories=categories)
+        
+        return {
+            "URL": url,
+            "Status": "Success",
+            "Performance Score": metrics.get('performance_score', 'N/A'),
+            "Accessibility Score": metrics.get('accessibility_score', 'N/A'),
+            "Best Practices Score": metrics.get('best_practices_score', 'N/A'),
+            "Load Time (s)": metrics.get('load_time', 'N/A'),
+            "First Contentful Paint": next((d['displayValue'] for d in metrics.get('performance_details', []) if d.get('id') == 'first-contentful-paint'), 'N/A'),
+            "Largest Contentful Paint": next((d['displayValue'] for d in metrics.get('performance_details', []) if d.get('id') == 'largest-contentful-paint'), 'N/A'),
+            "Cumulative Layout Shift": next((d['displayValue'] for d in metrics.get('performance_details', []) if d.get('id') == 'cumulative-layout-shift'), 'N/A'),
+            "Time to First Byte": next((d['displayValue'] for d in metrics.get('performance_details', []) if d.get('id') == 'server-response-time'), 'N/A'),
+            "First Input Delay": next((d['displayValue'] for d in metrics.get('performance_details', []) if d.get('id') == 'first-input-delay'), 'N/A'),
+        }
+    except Exception as e:
+        return {
+            "URL": url,
+            "Status": "Failed",
+            "Error": str(e)
+        }
+
+def process_seo_performance_batch(job_id, file_path, test_type, device_type, job_dir, api_key=None):
+    import pandas as pd
+    from utils.pagespeed import PageSpeedInsights
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import traceback
+
+    try:
+        store.save_job(job_id, {"step": "Reading file...", "progress": 5})
+        
+        # Read Excel or CSV
+        if file_path.endswith('.csv'):
+            df = pd.read_csv(file_path)
+        else:
+            df = pd.read_excel(file_path)
+            
+        # Find URL column
+        url_col = None
+        for col in df.columns:
+            if "url" in str(col).lower() or "link" in str(col).lower() or "website" in str(col).lower():
+                url_col = col
+                break
+        if not url_col:
+            # Fallback: assume first column
+            url_col = df.columns[0]
+            
+        urls = df[url_col].dropna().tolist()
+        total_urls = len(urls)
+        
+        if total_urls == 0:
+            raise Exception("No URLs found in the file.")
+            
+        store.save_job(job_id, {"step": f"Found {total_urls} URLs to process...", "progress": 10})
+        
+        key_to_use = api_key or PAGESPEED_API_KEY
+        psi = PageSpeedInsights(api_key=key_to_use)
+        
+        # Determine categories
+        categories = []
+        if test_type in ['both', 'seo']:
+            categories.extend(['seo', 'accessibility', 'best-practices'])
+        if test_type in ['both', 'performance']:
+            categories.append('performance')
+        if not categories:
+            categories = ['performance', 'seo', 'accessibility', 'best-practices']
+            
+        strategy = 'mobile' if device_type == 'mobile' else 'desktop'
+        results = []
+        completed = 0
+        
+        # Process in parallel (max 3 workers to avoid strict rate limits if no API key)
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            future_to_url = {executor.submit(analyze_single_url_psi, url, psi, strategy, categories): url for url in urls}
+            
+            for future in as_completed(future_to_url):
+                url = future_to_url[future]
+                try:
+                    res = future.result()
+                    results.append(res)
+                except Exception as e:
+                    results.append({"URL": url, "Status": "System Error", "Error": str(e)})
+                
+                completed += 1
+                current_progress = 10 + int((completed / total_urls) * 85)
+                store.save_job(job_id, {"step": f"Analyzed {completed}/{total_urls}: {url}", "progress": current_progress})
+
+        store.save_job(job_id, {"step": "Generating consolidated report...", "progress": 98})
+        
+        # Create Excel Report
+        # Create Excel Report
+        report_df = pd.DataFrame(results)
+        report_filename = f"seo_performance_report_{job_id}.xlsx"
+        report_path = os.path.join(job_dir, report_filename)
+        report_df.to_excel(report_path, index=False)
+        
+        # Create PDF Report
+        from utils.seo_performance_report import generate_batch_seo_pdf
+        pdf_path = generate_batch_seo_pdf(results, job_id, job_dir)
+
+        final_result = {
+            "total_processed": total_urls,
+            "report_url": f"/download/{job_id}/{report_filename}",
+            "pdf_report_url": f"/download/{job_id}/{os.path.basename(pdf_path)}"
+        }
+        
+        store.save_job(job_id, {
+            "result": final_result,
+            "status": "completed",
+            "progress": 100,
+            "step": "Done"
+        })
+
+    except Exception as e:
+        error_details = f"{str(e)}\n{traceback.format_exc()}"
+        store.save_job(job_id, {"status": "failed", "error": error_details})
+
+
+def process_seo_performance_sitemap(job_id, sitemap_url, test_type, device_type, job_dir, api_key=None):
+    from utils.sitemap_parser import fetch_sitemap_urls
+    from utils.pagespeed import PageSpeedInsights
+    import pandas as pd
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import traceback
+
+    try:
+        store.save_job(job_id, {"step": "Fetching sitemap URLs...", "progress": 5})
+        
+        urls = list(fetch_sitemap_urls(sitemap_url))
+        if not urls:
+            raise Exception("No URLs found in sitemap")
+            
+        # Limit processed pages
+        urls = urls[:200]
+        total_urls = len(urls)
+        
+        store.save_job(job_id, {"step": f"Found {total_urls} URLs to process...", "progress": 10})
+        
+        key_to_use = api_key or PAGESPEED_API_KEY
+        psi = PageSpeedInsights(api_key=key_to_use)
+        
+        # Determine categories
+        categories = []
+        if test_type in ['both', 'seo']:
+            categories.extend(['seo', 'accessibility', 'best-practices'])
+        if test_type in ['both', 'performance']:
+            categories.append('performance')
+        if not categories:
+            categories = ['performance', 'seo', 'accessibility', 'best-practices']
+            
+        strategy = 'mobile' if device_type == 'mobile' else 'desktop'
+        results = []
+        completed = 0
+        
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_url = {executor.submit(analyze_single_url_psi, url, psi, strategy, categories): url for url in urls}
+            
+            for future in as_completed(future_to_url):
+                url = future_to_url[future]
+                try:
+                    res = future.result()
+                    results.append(res)
+                except Exception as e:
+                    results.append({"URL": url, "Status": "System Error", "Error": str(e)})
+                    
+                completed += 1
+                current_progress = 10 + int((completed / total_urls) * 85)
+                store.save_job(job_id, {"step": f"Analyzed {completed}/{total_urls}: {url}", "progress": current_progress})
+
+        store.save_job(job_id, {"step": "Generating consolidated report...", "progress": 98})
+        
+        # Create Excel Report
+        # Create Excel Report
+        report_df = pd.DataFrame(results)
+        report_filename = f"seo_performance_report_{job_id}.xlsx"
+        report_path = os.path.join(job_dir, report_filename)
+        report_df.to_excel(report_path, index=False)
+        
+        # Create PDF Report
+        from utils.seo_performance_report import generate_batch_seo_pdf
+        pdf_path = generate_batch_seo_pdf(results, job_id, job_dir)
+
+        final_result = {
+            "total_processed": total_urls,
+            "report_url": f"/download/{job_id}/{report_filename}",
+            "pdf_report_url": f"/download/{job_id}/{os.path.basename(pdf_path)}"
         }
         
         store.save_job(job_id, {
@@ -1170,5 +1538,351 @@ def create_issue():
         return jsonify({"error": str(e)}), 500
 
 
+# GitHub Integration Routes
+
+@app.post("/api/github/config")
+def save_github_config():
+    data = request.json
+    token = data.get("token")
+    owner = data.get("owner")
+    repo = data.get("repo")
+
+    if not all([token, owner, repo]):
+        return jsonify({"error": "All fields are required"}), 400
+
+    try:
+        # Test connection
+        from utils.github_client import GitHubClient
+        client = GitHubClient(token, owner, repo)
+        client.verify_connection()
+        GitHubClient.save_config(token, owner, repo)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.get("/api/github/config")
+def get_github_config():
+    from utils.github_client import GitHubClient
+    config = GitHubClient.load_config()
+    # Mask token
+    if config.get("token"):
+        config["token"] = "********"
+    return jsonify(config)
+
+@app.post("/api/github/issue")
+def create_github_issue():
+    data = request.json
+    title = data.get("title")
+    body = data.get("body")
+    job_id = data.get("job_id")
+    issue_filename = data.get("issue_filename")  # Context only
+    
+    from utils.github_client import GitHubClient
+    config = GitHubClient.load_config()
+    if not config:
+        return jsonify({"error": "GitHub configuration not found. Please configure GitHub first."}), 400
+
+    try:
+        client = GitHubClient(config["token"], config["owner"], config["repo"])
+        
+        # Append some context if available
+        if job_id:
+            body += f"\n\n**Visual Testing Context**\nJob ID: {job_id}"
+        if issue_filename:
+             body += f"\nFile: {issue_filename}"
+
+        gh_issue = client.create_issue(
+            title=title,
+            body=body,
+            labels=["visual-regression"]
+        )
+        return jsonify({"success": True, "number": gh_issue["number"], "url": gh_issue["html_url"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.post("/api/history/delete")
+def delete_history():
+    try:
+        data = request.json
+        job_ids = data.get("job_ids", [])
+        if not job_ids:
+            return jsonify({"error": "No job_ids provided"}), 400
+            
+        store.delete_jobs(job_ids)
+        
+        # Cleanup directories
+        for job_id in job_ids:
+            safe_id = secure_filename(job_id)
+            job_dir = os.path.join(RUNS_DIR, safe_id)
+            if os.path.exists(job_dir):
+                import shutil
+                try:
+                    shutil.rmtree(job_dir)
+                except Exception:
+                    pass
+                    
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def process_git_push(job_id, commit_message, branch):
+    """Background thread for git push operations"""
+    import subprocess
+    
+    project_dir = BASE_DIR
+    
+    try:
+        # Update status: Staging
+        store.update_job(job_id, {
+            "status": "running",
+            "progress": 10,
+            "step": "Staging changes (git add .)"
+        })
+        
+        # Stage all changes
+        add_result = subprocess.run(
+            ["git", "add", "."],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if add_result.returncode != 0:
+            store.update_job(job_id, {
+                "status": "failed",
+                "error": f"Failed to stage changes: {add_result.stderr}",
+                "progress": 100
+            })
+            return
+        
+        # Update status: Checking changes
+        store.update_job(job_id, {
+            "progress": 30,
+            "step": "Checking for changes"
+        })
+        
+        # Check if there are changes to commit
+        status_result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if not status_result.stdout.strip():
+            store.update_job(job_id, {
+                "status": "completed",
+                "progress": 100,
+                "step": "No changes to commit",
+                "result": {
+                    "success": True,
+                    "message": "No changes to commit",
+                    "skipped": True
+                }
+            })
+            return
+        
+        # Update status: Committing
+        store.update_job(job_id, {
+            "progress": 50,
+            "step": f"Committing changes"
+        })
+        
+        # Commit changes
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", commit_message],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if commit_result.returncode != 0:
+            store.update_job(job_id, {
+                "status": "failed",
+                "error": f"Failed to commit: {commit_result.stderr}",
+                "progress": 100
+            })
+            return
+        
+        # Update status: Pushing
+        store.update_job(job_id, {
+            "progress": 70,
+            "step": f"Pushing to {branch}"
+        })
+        
+        # Push to remote (this is the slow part)
+        push_result = subprocess.run(
+            ["git", "push", "origin", branch],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=120  # 2 minutes max for push
+        )
+        
+        if push_result.returncode != 0:
+            store.update_job(job_id, {
+                "status": "failed",
+                "error": f"Failed to push to {branch}: {push_result.stderr}",
+                "progress": 100
+            })
+            return
+        
+        # Success!
+        store.update_job(job_id, {
+            "status": "completed",
+            "progress": 100,
+            "step": "Successfully pushed to GitHub!",
+            "result": {
+                "success": True,
+                "message": f"Successfully pushed to {branch}",
+                "commit_message": commit_message,
+                "branch": branch,
+                "commit_output": commit_result.stdout.strip(),
+                "push_output": push_result.stdout.strip()
+            }
+        })
+        
+    except subprocess.TimeoutExpired as e:
+        store.update_job(job_id, {
+            "status": "failed",
+            "error": f"Operation timed out: {str(e)}",
+            "progress": 100
+        })
+    except Exception as e:
+        store.update_job(job_id, {
+            "status": "failed",
+            "error": str(e),
+            "progress": 100
+        })
+
+
+@app.post("/api/git/push")
+def git_push():
+    """
+    Push changes to GitHub automatically (async)
+    Expects JSON: { "commit_message": "...", "branch": "main" }
+    Returns job_id for status polling
+    """
+    try:
+        import subprocess
+        
+        data = request.json or {}
+        commit_message = data.get("commit_message", "🎨 Update from Visual Testing Tool")
+        branch = data.get("branch", "main")
+        
+        project_dir = BASE_DIR
+        
+        # Quick check if git repo exists
+        check_git = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if check_git.returncode != 0:
+            return jsonify({
+                "success": False,
+                "error": "Not a git repository. Initialize git first."
+            }), 400
+        
+        # Create background job
+        job_id = f"git_{str(uuid.uuid4())[:8]}"
+        
+        job_data = {
+            "job_id": job_id,
+            "type": "git_push",
+            "status": "running",
+            "progress": 0,
+            "step": "Initializing git push...",
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "result": None,
+            "error": None,
+            "commit_message": commit_message,
+            "branch": branch
+        }
+        store.save_job(job_id, job_data)
+        
+        # Start background thread
+        thread = threading.Thread(
+            target=process_git_push,
+            args=(job_id, commit_message, branch)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        # Return immediately with job_id
+        return jsonify({
+            "success": True,
+            "job_id": job_id,
+            "message": "Git push started in background"
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.get("/api/git/status")
+def git_status():
+    """Get current git status"""
+    try:
+        import subprocess
+        
+        project_dir = BASE_DIR
+        
+        # Get branch
+        branch_result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True
+        )
+        current_branch = branch_result.stdout.strip() if branch_result.returncode == 0 else "unknown"
+        
+        # Get status
+        status_result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True
+        )
+        
+        has_changes = bool(status_result.stdout.strip())
+        
+        # Get last commit
+        log_result = subprocess.run(
+            ["git", "log", "-1", "--pretty=format:%h - %s (%ar)"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True
+        )
+        last_commit = log_result.stdout.strip() if log_result.returncode == 0 else "No commits"
+        
+        return jsonify({
+            "success": True,
+            "current_branch": current_branch,
+            "has_changes": has_changes,
+            "changes_count": len(status_result.stdout.strip().split('\n')) if has_changes else 0,
+            "last_commit": last_commit
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=7860, debug=True)
+

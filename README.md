@@ -20,6 +20,8 @@ pip install --upgrade pip
 pip install -r requirements.txt
 python -m playwright install --with-deps
 python app.py
+
+.venv/bin/python app.py
 ```
 
 Open http://localhost:7860

@@ -1,0 +1,31 @@
+{
+    "threshold": {
+        "max_diff_percentage": 5.0,
+        "fail_on_new_elements": true,
+        "fail_on_missing_elements": true
+    },
+    "urls_to_test": [
+        {
+            "name": "Homepage",
+            "url": "https://staging.example.com",
+            "baseline": "homepage",
+            "enabled": true
+        },
+        {
+            "name": "Login Page",
+            "url": "https://staging.example.com/login",
+            "baseline": "login",
+            "enabled": true
+        }
+    ],
+    "notification": {
+        "github_status_check": true,
+        "github_pr_comment": true,
+        "fail_build_on_threshold": true
+    },
+    "comparison": {
+        "ignore_antialiasing": true,
+        "ignore_colors": false,
+        "pixel_ratio": 0.1
+    }
+}

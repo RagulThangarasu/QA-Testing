@@ -58,6 +58,19 @@ class JobStore:
             if job_id in data:
                 del data[job_id]
                 self._save(data)
+    
+    def delete_jobs(self, job_ids):
+        with self.lock:
+            data = self._load()
+            changed = False
+            for job_id in job_ids:
+                if job_id in data:
+                    del data[job_id]
+                    changed = True
+            
+            if changed:
+                self._save(data)
+
 
 # Singleton instance
 store = JobStore(os.path.join(os.path.dirname(os.path.dirname(__file__)), "runs.json"))

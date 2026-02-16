@@ -4,6 +4,10 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.charts.barcharts import VerticalBarChart
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.charts.legends import Legend
 from datetime import datetime
 
 def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_id, output_dir):
@@ -83,23 +87,155 @@ def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_
     ]))
     
     elements.append(summary_table)
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 25))
     
+    # ---------------------------------------------------------
+    # Visual Summary (Charts)
+    # ---------------------------------------------------------
+    visual_heading = Paragraph("Visual Analysis", heading_style)
+    elements.append(visual_heading)
+
+    # Prepare Data
+    # Scores
+    s_seo = metrics.get('seo_score', 0) or 0
+    s_perf = metrics.get('performance_score', 0) or 0
+    s_acc = metrics.get('accessibility_score', 0) or 0
+    s_best = metrics.get('best_practices_score', 0) or 0
+    
+    # Counts
+    pass_count = 0
+    fail_count = 0
+    
+    # Check SEO Details
+    if metrics.get('seo_details'):
+        for i in metrics['seo_details']:
+            if i.get('passed'): pass_count += 1
+            else: fail_count += 1
+            
+    # Check Perf Details (using 0.9 threshold for 'pass')
+    if metrics.get('performance_details'):
+        for i in metrics['performance_details']:
+            score = i.get('score', 0)
+            if score >= 0.9: pass_count += 1
+            else: fail_count += 1
+            
+    # Draw Bar Chart (Scores)
+    d_bar = Drawing(400, 200)
+    bc = VerticalBarChart()
+    bc.x = 50
+    bc.y = 50
+    bc.height = 125
+    bc.width = 300
+    bc.data = [[s_seo, s_perf, s_acc, s_best]]
+    bc.valueAxis.valueMin = 0
+    bc.valueAxis.valueMax = 100
+    bc.valueAxis.valueStep = 20
+    bc.categoryAxis.labels.boxAnchor = 'ne'
+    bc.categoryAxis.categoryNames = ['SEO', 'Performance', 'Accessibility', 'Best Pract.']
+    bc.bars[0].fillColor = colors.HexColor("#2563eb")
+    
+    d_bar.add(bc)
+    
+    # Add title to bar chart via Paragraph
+    elements.append(Paragraph("Category Scores", styles['Heading3']))
+    elements.append(d_bar)
+    elements.append(Spacer(1, 15))
+    
+    # Draw Pie Chart (Pass/Fail)
+    if pass_count + fail_count > 0:
+        d_pie = Drawing(400, 150)
+        pc = Pie()
+        pc.x = 100
+        pc.y = 25
+        pc.width = 100
+        pc.height = 100
+        pc.data = [pass_count, fail_count]
+        pc.labels = [f"Passed ({pass_count})", f"Issues ({fail_count})"]
+        pc.slices.strokeWidth = 0.5
+        pc.slices[0].fillColor = colors.HexColor("#10b981") # Green
+        pc.slices[1].fillColor = colors.HexColor("#ef4444") # Red
+        
+        d_pie.add(pc)
+        
+        legend = Legend()
+        legend.alignment = 'right'
+        legend.x = 300
+        legend.y = 80
+        legend.colorNamePairs = [(colors.HexColor("#10b981"), 'Passed'), (colors.HexColor("#ef4444"), 'Issues')]
+        d_pie.add(legend)
+        
+        elements.append(Paragraph("Audit Status Breakdown", styles['Heading3']))
+        elements.append(d_pie)
+        elements.append(Spacer(1, 20))
+
+
+    # ---------------------------------------------------------
+    # Critical Issues & Improvements
+    # ---------------------------------------------------------
+    issues_heading = Paragraph("Required Improvements", heading_style)
+    elements.append(issues_heading)
+    
+    issues_data = [['Category', 'Issue / Recommendation', 'impact']]
+    has_issues = False
+    
+    # SEO Failures
+    if metrics.get('seo_details'):
+            if not check['passed']:
+                text = f"<b>{check['name']}</b><br/>{check.get('details', '')}"
+                issues_data.append(['SEO', Paragraph(text, styles['Normal']), 'High'])
+                has_issues = True
+
+    # Performance Low Scores (< 0.5 is poor)
+    if metrics.get('performance_details'):
+        for metric in metrics['performance_details']:
+            if metric.get('score', 1) < 0.5:
+                text = f"<b>{metric['name']}</b><br/>Value: {metric.get('displayValue')}"
+                issues_data.append(['Performance', Paragraph(text, styles['Normal']), 'High'])
+                has_issues = True
+    
+    # Recommendations
+    if metrics.get('recommendations'):
+        for rec in metrics['recommendations']:
+             text = f"<b>{rec['title']}</b><br/>{rec['description']}"
+             issues_data.append(['Optimization', Paragraph(text, styles['Normal']), 'Medium'])
+             has_issues = True
+
+    if has_issues:
+        issues_table = Table(issues_data, colWidths=[1.5*inch, 3.5*inch, 1*inch])
+        issues_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dc2626')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('WORDWRAP', (0, 0), (-1, -1), True)
+        ]))
+        elements.append(issues_table)
+    else:
+        elements.append(Paragraph("No critical issues found! Great job.", styles['Normal']))
+        
+    elements.append(Spacer(1, 25))
+
+    # Existing Scores Overview (Simplified or kept as is)
     # Scores Overview
-    scores_heading = Paragraph("Scores Overview", heading_style)
+    scores_heading = Paragraph("Detailed Scores", heading_style)
     elements.append(scores_heading)
     
     scores_data = [['Metric', 'Score', 'Rating']]
     
-    if metrics.get('seo_score') is not None:
-        seo_score = metrics['seo_score']
-        seo_rating = get_rating(seo_score)
-        scores_data.append(['SEO Score', f"{seo_score}/100", seo_rating])
+    # Add all 4 scores
+    scores_list = [
+        ('SEO', s_seo), 
+        ('Performance', s_perf), 
+        ('Accessibility', s_acc), 
+        ('Best Practices', s_best)
+    ]
     
-    if metrics.get('performance_score') is not None:
-        perf_score = metrics['performance_score']
-        perf_rating = get_rating(perf_score)
-        scores_data.append(['Performance Score', f"{perf_score}/100", perf_rating])
+    for name, val in scores_list:
+        if val > 0: # Show if present
+             scores_data.append([name, f"{val}/100", get_rating(val)])
     
     scores_table = Table(scores_data, colWidths=[2.5*inch, 1.5*inch, 1.5*inch])
     scores_table.setStyle(TableStyle([
@@ -121,7 +257,7 @@ def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_
     
     # SEO Details
     if test_type in ['both', 'seo'] and metrics.get('seo_details'):
-        seo_heading = Paragraph("SEO Analysis", heading_style)
+        seo_heading = Paragraph("SEO Analysis Details", heading_style)
         elements.append(seo_heading)
         
         seo_details = metrics['seo_details']
@@ -149,15 +285,17 @@ def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_
     
     # Performance Details
     if test_type in ['both', 'performance'] and metrics.get('performance_details'):
-        perf_heading = Paragraph("Performance Metrics", heading_style)
+        perf_heading = Paragraph("Performance Metrics Details", heading_style)
         elements.append(perf_heading)
         
         perf_details = metrics['performance_details']
         perf_data = [['Metric', 'Value', 'Rating']]
         
         for metric in perf_details:
-            rating = get_metric_rating(metric['value'], metric.get('threshold'))
-            perf_data.append([metric['name'], metric['value'], rating])
+            # Use score for rating if available
+            score = metric.get('score', 0)
+            rating = get_metric_rating(score)
+            perf_data.append([metric['name'], metric.get('displayValue', 'N/A'), rating])
         
         perf_table = Table(perf_data, colWidths=[2.5*inch, 2*inch, 1.5*inch])
         perf_table.setStyle(TableStyle([
@@ -174,21 +312,123 @@ def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_
         elements.append(perf_table)
         elements.append(Spacer(1, 20))
     
-    # Recommendations
-    if metrics.get('recommendations'):
-        rec_heading = Paragraph("Recommendations", heading_style)
-        elements.append(rec_heading)
-        
-        for idx, rec in enumerate(metrics['recommendations'], 1):
-            rec_text = Paragraph(f"<b>{idx}. {rec['title']}</b><br/>{rec['description']}", styles['Normal'])
-            elements.append(rec_text)
-            elements.append(Spacer(1, 8))
-    
     # Build PDF
     doc.build(elements)
     
     return pdf_path
-
+    
+def generate_batch_seo_pdf(results, job_id, output_dir):
+    """
+    Generate a summary PDF for batch SEO/Performance jobs
+    """
+    pdf_path = f"{output_dir}/batch_report.pdf"
+    doc = SimpleDocTemplate(pdf_path, pagesize=letter)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Title
+    elements.append(Paragraph("Batch SEO & Performance Report", styles['Title']))
+    elements.append(Paragraph(f"Job ID: {job_id} | Date: {datetime.now().strftime('%Y-%m-%d')}", styles['Normal']))
+    elements.append(Spacer(1, 20))
+    
+    # Statistics
+    total = len(results)
+    success = len([r for r in results if r.get('Status') == 'Success'])
+    failed = total - success
+    
+    # Calculate Averages (filtering out N/A)
+    seo_scores = [r.get('SEO Score') for r in results if isinstance(r.get('SEO Score'), (int, float))]
+    perf_scores = [r.get('Performance Score') for r in results if isinstance(r.get('Performance Score'), (int, float))]
+    
+    avg_seo = sum(seo_scores) / len(seo_scores) if seo_scores else 0
+    avg_perf = sum(perf_scores) / len(perf_scores) if perf_scores else 0
+    
+    stats_data = [
+        ['Total URLs', total],
+        ['Successful Scans', success],
+        ['Failed Scans', failed],
+        ['Avg SEO Score', f"{avg_seo:.1f}"],
+        ['Avg Performance', f"{avg_perf:.1f}"]
+    ]
+    
+    t = Table(stats_data, colWidths=[2*inch, 2*inch])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (0,-1), colors.lightgrey),
+        ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('PADDING', (0,0), (-1,-1), 6),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 25))
+    
+    # ---------------------------------------------------------
+    # Visual Analysis (Charts)
+    # ---------------------------------------------------------
+    elements.append(Paragraph("Batch Analysis Overview", styles['Heading2']))
+    
+    # Pie Chart: Success vs Failure
+    d_pie = Drawing(400, 150)
+    pc = Pie()
+    pc.x = 100
+    pc.y = 25
+    pc.width = 100
+    pc.height = 100
+    pc.data = [success, failed]
+    pc.labels = [f"Success ({success})", f"Failed ({failed})"]
+    pc.slices.strokeWidth = 0.5
+    pc.slices[0].fillColor = colors.HexColor("#10b981") 
+    pc.slices[1].fillColor = colors.HexColor("#ef4444")
+    
+    d_pie.add(pc)
+    
+    # Legend
+    legend = Legend()
+    legend.alignment = 'right'
+    legend.x = 300
+    legend.y = 80
+    legend.colorNamePairs = [(colors.HexColor("#10b981"), 'Success'), (colors.HexColor("#ef4444"), 'Failed')]
+    d_pie.add(legend)
+    
+    elements.append(d_pie)
+    elements.append(Spacer(1, 25))
+    
+    # ---------------------------------------------------------
+    # Detailed URL List
+    # ---------------------------------------------------------
+    elements.append(Paragraph("Detailed URL Analysis", styles['Heading2']))
+    
+    # Table Header
+    det_data = [['URL', 'SEO', 'Perf', 'LCP', 'CLS', 'TTFB']]
+    
+    for r in results:
+        # Truncate URL for display
+        url_text = r.get('URL', '')
+        disp_url = Paragraph(url_text, styles['Normal'])
+        
+        det_data.append([
+            disp_url,
+            r.get('SEO Score', '-'),
+            r.get('Performance Score', '-'),
+            r.get('Largest Contentful Paint', '-'),
+            r.get('Cumulative Layout Shift', '-'),
+            r.get('Time to First Byte', '-')
+        ])
+        
+    t_det = Table(det_data, colWidths=[2.5*inch, 0.7*inch, 0.7*inch, 0.8*inch, 0.8*inch, 0.8*inch], repeatRows=1)
+    t_det.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2563eb')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('FONTSIZE', (0,0), (-1,-1), 8),
+        ('WORDWRAP', (0,0), (-1,-1), True)
+    ]))
+    
+    elements.append(t_det)
+    
+    doc.build(elements)
+    return pdf_path
 
 def get_rating(score):
     """Get rating based on score"""
@@ -200,10 +440,10 @@ def get_rating(score):
         return 'Poor'
 
 
-def get_metric_rating(value, threshold=None):
-    """Get rating for a metric value"""
-    if threshold is None:
-        return 'N/A'
-    # Since values are strings, we can't compare them directly
-    # Just return N/A for now, or you could parse the numeric values
-    return 'N/A'
+def get_metric_rating(score):
+    """Get rating for a metric value based on score (0-1)"""
+    if score >= 0.9:
+        return 'Good'
+    elif score >= 0.5:
+        return 'Needs Improv.'
+    return 'Poor'

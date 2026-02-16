@@ -20,8 +20,12 @@
       <a href="/broken-links">Broken Links</a>
       <a href="/accessibility">Accessibility</a>
       <a href="/seo-performance">SEO & Performance</a>
+
       <button id="nav-jira" class="btn-secondary"
         style="font-size: 14px; padding: 6px 12px; cursor: pointer; border: 1px solid #374151; background: #1f2937; color: #fff; margin-left: 20px;">Jira
+        Config</button>
+      <button id="nav-github" class="btn-secondary"
+        style="font-size: 14px; padding: 6px 12px; cursor: pointer; border: 1px solid #374151; background: #24292e; color: #fff; margin-left: 10px;">GitHub
         Config</button>
     </nav>
   </header>
@@ -30,31 +34,48 @@
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
         <h1 style="margin: 0;">Visual Testing Studio</h1>
         <div style="display: flex; align-items: center; gap: 15px;">
+          <button id="btn-push-github" class="btn-primary"
+            style="font-size: 14px; padding: 8px 16px; cursor: pointer; background: #238636; border: 1px solid #2ea043; display: flex; align-items: center; gap: 6px;">
+            <span>🚀</span>
+            <span>Push to GitHub</span>
+          </button>
+          <button id="btn-manage-baselines" class="btn-secondary"
+            style="font-size: 14px; padding: 6px 12px; cursor: pointer;">Manage Baselines</button>
           <button id="nav-clear" class="btn-reject" style="font-size: 14px; padding: 6px 12px; cursor: pointer;"
             onclick="window.location.reload()">Clear</button>
           <a href="#" id="nav-history" style="color: var(--accent); text-decoration: none; font-weight: 500;">History
             &rarr;</a>
         </div>
+
       </div>
       <form id="cmpForm">
-        <label>Figma PNG</label>
-        <div class="file-upload-wrapper" id="drop-zone">
-          <input type="file" id="figma" name="figma_png" accept="image/png" required />
-          <div class="file-upload-content">
-            <span class="file-upload-icon">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-            </span>
-            <div id="file-text" class="file-upload-text">Click or Drop Figma PNG here</div>
+        <label>Stage URL
+          <input type="url" id="url" name="stage_url" placeholder="https://staging.example.com/page" required />
+        </label>
+
+        <div id="figma-upload-section" style="display:none; margin-top: 15px;">
+          <label>Figma PNG (Required for new baseline)</label>
+          <div class="file-upload-wrapper" id="drop-zone">
+            <input type="file" id="figma" name="figma_png" accept="image/png" />
+            <div class="file-upload-content">
+              <span class="file-upload-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              </span>
+              <div id="file-text" class="file-upload-text">Click or Drop Figma PNG here</div>
+            </div>
           </div>
         </div>
 
-        <label>Stage URL
-          <input type="url" id="url" name="stage_url" placeholder="https://staging.example.com/page" required />
+
+        <label style="margin-top: 10px; display: block;">Component Selector (Optional)
+          <span style="font-weight: normal; color: #666; font-size: 0.9em;">(Capture only this element, e.g.
+            #header)</span>
+          <input type="text" name="component_selector" id="component_selector" placeholder="#hero, .header-main" />
         </label>
 
         <div class="row">
@@ -94,6 +115,7 @@
                 placeholder=".ad-banner, #cookie-consent, .timestamp"
                 style="width: 100%; border: 1px solid #ccc; border-radius: 4px; padding: 8px; margin-top: 5px; font-family: monospace;"></textarea>
             </label>
+
 
             <div style="margin-top: 10px;">
               <label style="display: block; margin-bottom: 4px; font-weight: 500;">Wait Time (ms)</label>
@@ -173,7 +195,17 @@
 
     <div id="view-history" class="hidden">
       <h1>Test History</h1>
+
+      <div class="filters">
+        <button class="filter-btn active" onclick="filterHistory('all', this)">All</button>
+        <button class="filter-btn" onclick="filterHistory('pending', this)">Pending Review</button>
+        <button class="filter-btn" onclick="filterHistory('start', this)">Approved</button>
+        <!-- Using 'start' as lazy way or custom -->
+        <button class="filter-btn" onclick="filterHistory('rejected', this)">Rejected</button>
+      </div>
+
       <table>
+
         <thead>
           <tr>
             <th width="40"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"></th>
@@ -190,6 +222,34 @@
       <div id="pagination"
         style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;"></div>
     </div>
+
+    <div id="view-baselines" class="hidden">
+      <h1>Baseline Management</h1>
+      <div id="baselines-list" class="grid-baselines"></div>
+    </div>
+
+    <!-- Baseline History Modal -->
+    <div id="baseline-history-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 800px; width: 90%;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 id="bl-modal-title">History for ...</h3>
+          <button onclick="document.getElementById('baseline-history-modal').classList.add('hidden')"
+            class="btn-secondary">Close</button>
+        </div>
+        <table style="width:100%; margin-top:15px;">
+          <thead>
+            <tr>
+              <th>Version</th>
+              <th>Date</th>
+              <th>Job ID</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="bl-history-list"></tbody>
+        </table>
+      </div>
+    </div>
+
 
     <div id="toast" class="toast hidden"></div>
 
@@ -222,10 +282,82 @@
       </div>
     </div>
 
+    <!-- GitHub Modals -->
+    <div id="github-config-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>GitHub Configuration</h3>
+        <label>Personal Access Token <input type="password" id="gh-token" placeholder="ghp_..."></label>
+        <label>Repo Owner <input type="text" id="gh-owner" placeholder="octocat"></label>
+        <label>Repo Name <input type="text" id="gh-repo" placeholder="hello-world"></label>
+        <div class="modal-actions">
+          <button id="btnSaveGitHub">Save & Test</button>
+          <button onclick="document.getElementById('github-config-modal').classList.add('hidden')"
+            class="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="github-report-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Report to GitHub</h3>
+        <label>Title <input type="text" id="gh-title" placeholder="Visual regression detected..."></label>
+        <label>Body <textarea id="gh-body" rows="5" placeholder="Description of the issue..."></textarea></label>
+        <div class="modal-actions">
+          <button id="btnSendGitHub">Create Issue</button>
+          <button onclick="document.getElementById('github-report-modal').classList.add('hidden')"
+            class="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Git Push Modal -->
+    <div id="git-push-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>🚀 Push to GitHub</h3>
+        <div id="git-status-info"
+          style="margin-bottom: 15px; padding: 10px; background: #f3f4f6; border-radius: 4px; font-size: 13px;">
+          <div style="margin-bottom: 5px;"><strong>Branch:</strong> <span id="git-current-branch">...</span></div>
+          <div style="margin-bottom: 5px;"><strong>Changes:</strong> <span id="git-changes-count">...</span></div>
+          <div><strong>Last Commit:</strong> <span id="git-last-commit">...</span></div>
+        </div>
+        <label>Commit Message
+          <input type="text" id="git-commit-message" placeholder="🎨 Update from Visual Testing Tool"
+            value="🎨 Update baselines and tests">
+        </label>
+        <label>Branch
+          <input type="text" id="git-branch" placeholder="main" value="main">
+        </label>
+        <div
+          style="margin: 15px 0; padding: 10px; background: #eff6ff; border-left: 3px solid #3b82f6; border-radius: 4px;">
+          <p style="margin: 0; font-size: 13px; color: #1e40af;">
+            ℹ️ This will automatically:
+          </p>
+          <ul style="margin: 8px 0 0 20px; font-size: 13px; color: #1e40af;">
+            <li>Stage all changes (git add .)</li>
+            <li>Commit with your message</li>
+            <li>Push to GitHub</li>
+            <li>Trigger automated visual tests</li>
+          </ul>
+        </div>
+        <div id="git-push-progress" class="hidden" style="margin: 15px 0;">
+          <div class="progress-bar-bg">
+            <div id="git-push-progress-fill" class="progress-bar-fill" style="width: 0%"></div>
+          </div>
+          <div id="git-push-status" style="margin-top: 8px; font-size: 13px; color: #666;"></div>
+        </div>
+        <div class="modal-actions">
+          <button id="btnExecutePush">Push Changes</button>
+          <button onclick="document.getElementById('git-push-modal').classList.add('hidden')"
+            class="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
   </main>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=5"></script>
   <script src="/static/jira_integration.js"></script>
+  <script src="/static/github_integration.js"></script>
+  <script src="/static/git_push.js"></script>
 </body>
 
 </html>

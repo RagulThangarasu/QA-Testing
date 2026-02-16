@@ -179,14 +179,44 @@ def compare_images(figma_path, stage_path, out_dir, **kwargs):
     stage_bgr = _read_png_as_bgr(stage_path)
 
     # Align stage to figma
-    stage_aligned_bgr, H = _align_orb(figma_bgr, stage_bgr)
+    stage_aligned_bgr, M = _align_orb(figma_bgr, stage_bgr)
+    
+    # Smart Crop: Limit comparison to the overlapping area
+    # This handles cases where Stage is a small component matches into a large Figma page
+    # and prevents comparing "empty" black padding against content.
+    if M is not None:
+        h_stage, w_stage = stage_bgr.shape[:2]
+        h_figma, w_figma = figma_bgr.shape[:2]
+        
+        # Transform stage corners to find where they land in figma space
+        pts = np.float32([ [0,0], [w_stage, 0], [w_stage, h_stage], [0, h_stage] ]).reshape(-1, 1, 2)
+        dst = cv2.transform(pts, M)
+        
+        x_min = int(np.min(dst[:,:,0]))
+        y_min = int(np.min(dst[:,:,1]))
+        x_max = int(np.max(dst[:,:,0]))
+        y_max = int(np.max(dst[:,:,1]))
+        
+        # Intersect with Figma bounds
+        x_min = max(0, x_min)
+        y_min = max(0, y_min)
+        x_max = min(w_figma, x_max)
+        y_max = min(h_figma, y_max)
+        
+        # Apply crop if valid
+        if x_max > x_min and y_max > y_min:
+            figma_bgr = figma_bgr[y_min:y_max, x_min:x_max]
+            stage_aligned_bgr = stage_aligned_bgr[y_min:y_max, x_min:x_max]
+    
+    # Save aligned (and now cropped) stage
     aligned_path = os.path.join(out_dir, "stage_aligned.png")
     cv2.imwrite(aligned_path, stage_aligned_bgr)
 
-    # Convert to gray & crop to common area
+    # Convert to gray
     figma_gray = cv2.cvtColor(figma_bgr, cv2.COLOR_BGR2GRAY)
     stage_gray = cv2.cvtColor(stage_aligned_bgr, cv2.COLOR_BGR2GRAY)
 
+    # Ensure dimensions match (redundant if crop worked, but safe)
     h = min(figma_gray.shape[0], stage_gray.shape[0])
     w = min(figma_gray.shape[1], stage_gray.shape[1])
     figma_gray = figma_gray[:h, :w]

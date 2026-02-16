@@ -1,0 +1,40 @@
+{
+    "baselines": [
+        {
+            "name": "homepage_desktop",
+            "url": "http://localhost:5000",
+            "output": "tests/baselines/homepage.png",
+            "fullpage": true,
+            "wait_time": 3000,
+            "viewport_width": 1920,
+            "viewport_height": 1080
+        },
+        {
+            "name": "broken_links_page",
+            "url": "http://localhost:5000/broken-links",
+            "output": "tests/baselines/broken_links.png",
+            "fullpage": true,
+            "wait_time": 3000,
+            "viewport_width": 1920,
+            "viewport_height": 1080
+        },
+        {
+            "name": "seo_performance_page",
+            "url": "http://localhost:5000/seo-performance",
+            "output": "tests/baselines/seo_performance.png",
+            "fullpage": true,
+            "wait_time": 3000,
+            "viewport_width": 1920,
+            "viewport_height": 1080
+        },
+        {
+            "name": "accessibility_page",
+            "url": "http://localhost:5000/accessibility",
+            "output": "tests/baselines/accessibility.png",
+            "fullpage": true,
+            "wait_time": 3000,
+            "viewport_width": 1920,
+            "viewport_height": 1080
+        }
+    ]
+}

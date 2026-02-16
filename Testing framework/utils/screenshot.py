@@ -14,7 +14,7 @@ def _parse_viewport(vp):
             return VIEWPORTS["desktop"]
     return VIEWPORTS.get(vp, VIEWPORTS["desktop"])
 
-def capture_screenshot(url, out_path, viewport="desktop", fullpage=True, wait="networkidle", mask_selectors=None, wait_time=1000):
+def capture_screenshot(url, out_path, viewport="desktop", fullpage=True, wait="networkidle", mask_selectors=None, wait_time=1000, selector=None):
     vp = _parse_viewport(viewport)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
@@ -46,6 +46,20 @@ def capture_screenshot(url, out_path, viewport="desktop", fullpage=True, wait="n
         if wait_time > 0:
             page.wait_for_timeout(wait_time)
             
+        # Component screenshot if selector provided
+        if selector:
+            try:
+                locator = page.locator(selector).first
+                if locator.count() > 0:
+                    locator.screenshot(path=out_path)
+                    context.close()
+                    browser.close()
+                    return
+                else:
+                    print(f"Selector '{selector}' not found. Falling back to full page.")
+            except Exception as e:
+                 print(f"Error capturing element '{selector}': {e}. Falling back to full page.")
+
         page.screenshot(path=out_path, full_page=fullpage)
         context.close()
         browser.close()

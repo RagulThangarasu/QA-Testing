@@ -56,7 +56,7 @@ function getScoreColor(score) {
 
 async function loadHistory(page = 1) {
     currentPage = page;
-    historyList.innerHTML = "<tr><td colspan='7'>Loading...</td></tr>";
+    historyList.innerHTML = "<tr><td colspan='8'>Loading...</td></tr>";
     document.getElementById("pagination").innerHTML = "";
 
     try {
@@ -78,7 +78,7 @@ async function loadHistory(page = 1) {
         }
 
         if (jobs.length === 0) {
-            historyList.innerHTML = "<tr><td colspan='7'>No history yet.</td></tr>";
+            historyList.innerHTML = "<tr><td colspan='8'>No history yet.</td></tr>";
             return;
         }
 
@@ -118,6 +118,9 @@ async function loadHistory(page = 1) {
             }
 
             const reportUrl = job.result?.report_url || "";
+            const pdfUrl = job.result?.pdf_report_url || "";
+
+
 
             return `
                 <tr>
@@ -128,7 +131,10 @@ async function loadHistory(page = 1) {
                     <td>${col1}</td>
                     <td>${col2}</td>
                     <td>
-                        ${reportUrl ? `<a href="${reportUrl}" class="btn-secondary" style="padding: 5px 10px; font-size: 12px;">Download</a>` : '-'}
+                        ${pdfUrl ? `<a href="${reportUrl}" class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" title="Download Excel">Excel</a>` : '-'}
+                    </td>
+                    <td>
+                        ${pdfUrl ? `<a href="${pdfUrl}" class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" title="Download PDF">PDF</a>` : (reportUrl ? `<a href="${reportUrl}" class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" title="Download PDF">PDF</a>` : '-')}
                     </td>
                 </tr>
             `;
@@ -138,7 +144,7 @@ async function loadHistory(page = 1) {
 
     } catch (err) {
         console.error(err);
-        historyList.innerHTML = "<tr><td colspan='7'>Error loading history.</td></tr>";
+        historyList.innerHTML = "<tr><td colspan='8'>Error loading history.</td></tr>";
     }
 }
 
@@ -200,25 +206,41 @@ async function deleteSelected() {
 }
 
 // Toggle Input Type
+// Toggle Input Type
 window.toggleInputType = function () {
     const type = document.querySelector('input[name="inputType"]:checked').value;
     const urlContainer = document.getElementById("urlInputContainer");
+    const sitemapContainer = document.getElementById("sitemapInputContainer");
     const fileContainer = document.getElementById("fileInputContainer");
+
     const urlInput = document.getElementById("url");
+    const sitemapInput = document.getElementById("sitemap_url");
     const fileInput = document.getElementById("file");
+
+    // Reset all
+    urlContainer.classList.add("hidden");
+    sitemapContainer.classList.add("hidden");
+    fileContainer.classList.add("hidden");
+
+    urlInput.required = false;
+    sitemapInput.required = false;
+    fileInput.required = false;
 
     if (type === "url") {
         urlContainer.classList.remove("hidden");
-        fileContainer.classList.add("hidden");
         urlInput.required = true;
-        fileInput.required = false;
-        fileInput.value = ""; // clear file
+        sitemapInput.value = "";
+        fileInput.value = "";
+    } else if (type === "sitemap") {
+        sitemapContainer.classList.remove("hidden");
+        sitemapInput.required = true;
+        urlInput.value = "";
+        fileInput.value = "";
     } else {
-        urlContainer.classList.add("hidden");
         fileContainer.classList.remove("hidden");
-        urlInput.required = false;
         fileInput.required = true;
-        urlInput.value = ""; // clear url
+        urlInput.value = "";
+        sitemapInput.value = "";
     }
 }
 
@@ -276,8 +298,14 @@ async function pollStatus(jobId) {
             if (result.total_processed !== undefined) {
                 // Batch Result
                 resultHTML += `<p>Processed <strong>${result.total_processed}</strong> URLs.</p>`;
-                resultHTML += `<p>Download the consolidated report below:</p>`;
-                resultHTML += `<a href="${result.report_url}" class="btn-secondary" style="display: inline-block; padding: 10px 20px; text-decoration: none; margin-top: 10px;">Download Excel Report</a>`;
+                resultHTML += `<p>Download the consolidated reports below:</p>`;
+                resultHTML += `<div style="display:flex; gap:10px; margin-top:10px;">`;
+                resultHTML += `<a href="${result.report_url}" class="btn-secondary" style="padding: 10px 20px; text-decoration: none;">Download Excel Report</a>`;
+
+                if (result.pdf_report_url) {
+                    resultHTML += `<a href="${result.pdf_report_url}" class="btn-secondary" style="padding: 10px 20px; text-decoration: none;">Download PDF Summary</a>`;
+                }
+                resultHTML += `</div>`;
             } else {
                 // Single Page Result
                 resultHTML += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0;">`;
@@ -312,6 +340,42 @@ async function pollStatus(jobId) {
                 }
 
                 resultHTML += `</div>`;
+
+                // Detailed Metrics Section
+                if (result.performance_details && result.performance_details.length > 0) {
+                    resultHTML += `<h4 style="color: #cbd5e1; margin-top: 20px; border-bottom: 1px solid #334155; padding-bottom: 10px;">Core Web Vitals & Metrics</h4>`;
+                    resultHTML += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; margin-bottom: 20px;">`;
+
+                    result.performance_details.forEach(metric => {
+                        let color = '#4effa0'; // Default green
+                        if (metric.score !== undefined) {
+                            if (metric.score < 0.5) color = '#ff4444'; // Red
+                            else if (metric.score < 0.9) color = '#fbbf24'; // Orange
+                        }
+
+                        resultHTML += `
+                            <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #334155;">
+                                <span style="color: #94a3b8; font-size: 0.9em;">${metric.name}</span>
+                                <span style="color: ${color}; font-weight: bold;">${metric.displayValue}</span>
+                            </div>
+                        `;
+                    });
+                    resultHTML += `</div>`;
+                }
+
+                // Recommendations Section
+                if (result.recommendations && result.recommendations.length > 0) {
+                    resultHTML += `<h4 style="color: #cbd5e1; margin-top: 20px; border-bottom: 1px solid #334155; padding-bottom: 10px;">Improvement Opportunities</h4>`;
+                    resultHTML += `<ul style="list-style: none; padding: 0;">`;
+                    result.recommendations.forEach(rec => {
+                        resultHTML += `
+                            <li style="margin-bottom: 10px; background: rgba(51, 65, 85, 0.3); padding: 10px; border-radius: 6px;">
+                                <div style="color: #e2e8f0; font-weight: 500;">${rec.title}</div>
+                                <div style="color: #94a3b8; font-size: 0.85em; margin-top: 4px;">${rec.description}</div>
+                            </li>`;
+                    });
+                    resultHTML += `</ul>`;
+                }
                 resultHTML += `<p>Download the detailed PDF report below:</p>`;
                 resultHTML += `<a href="${result.report_url}" class="btn-secondary" style="display: inline-block; padding: 10px 20px; text-decoration: none; margin-top: 10px;">Download PDF Report</a>`;
             }
