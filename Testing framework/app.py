@@ -1629,26 +1629,26 @@ def delete_history():
 
 
 def process_git_push(job_id, commit_message, branch):
-    """Background thread for git push operations"""
+    """Background thread for git push operations - Optimized for speed"""
     import subprocess
     
     project_dir = BASE_DIR
     
     try:
-        # Update status: Staging
+        # Update status: Staging (10%)
         store.update_job(job_id, {
             "status": "running",
             "progress": 10,
-            "step": "Staging changes (git add .)"
+            "step": "Staging changes..."
         })
         
-        # Stage all changes
+        # Stage all changes (reduced timeout)
         add_result = subprocess.run(
             ["git", "add", "."],
             cwd=project_dir,
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=15
         )
         
         if add_result.returncode != 0:
@@ -1659,70 +1659,57 @@ def process_git_push(job_id, commit_message, branch):
             })
             return
         
-        # Update status: Checking changes
+        # Update status: Committing (40%)
         store.update_job(job_id, {
-            "progress": 30,
-            "step": "Checking for changes"
+            "progress": 40,
+            "step": "Committing changes..."
         })
         
-        # Check if there are changes to commit
-        status_result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=project_dir,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if not status_result.stdout.strip():
-            store.update_job(job_id, {
-                "status": "completed",
-                "progress": 100,
-                "step": "No changes to commit",
-                "result": {
-                    "success": True,
-                    "message": "No changes to commit",
-                    "skipped": True
-                }
-            })
-            return
-        
-        # Update status: Committing
-        store.update_job(job_id, {
-            "progress": 50,
-            "step": f"Committing changes"
-        })
-        
-        # Commit changes
+        # Commit changes (reduced timeout)
         commit_result = subprocess.run(
             ["git", "commit", "-m", commit_message],
             cwd=project_dir,
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=15
         )
         
+        # Check if commit succeeded or if there were no changes
         if commit_result.returncode != 0:
-            store.update_job(job_id, {
-                "status": "failed",
-                "error": f"Failed to commit: {commit_result.stderr}",
-                "progress": 100
-            })
-            return
+            # Check if error is "nothing to commit"
+            if "nothing to commit" in commit_result.stdout or "nothing added to commit" in commit_result.stdout:
+                store.update_job(job_id, {
+                    "status": "completed",
+                    "progress": 100,
+                    "step": "No changes to commit",
+                    "result": {
+                        "success": True,
+                        "message": "No changes to commit",
+                        "skipped": True
+                    }
+                })
+                return
+            else:
+                store.update_job(job_id, {
+                    "status": "failed",
+                    "error": f"Failed to commit: {commit_result.stderr}",
+                    "progress": 100
+                })
+                return
         
-        # Update status: Pushing
+        # Update status: Pushing (70%)
         store.update_job(job_id, {
             "progress": 70,
-            "step": f"Pushing to {branch}"
+            "step": f"Pushing to {branch}..."
         })
         
-        # Push to remote (this is the slow part)
+        # Push to remote
         push_result = subprocess.run(
             ["git", "push", "origin", branch],
             cwd=project_dir,
             capture_output=True,
             text=True,
-            timeout=120  # 2 minutes max for push
+            timeout=120
         )
         
         if push_result.returncode != 0:
@@ -1733,7 +1720,7 @@ def process_git_push(job_id, commit_message, branch):
             })
             return
         
-        # Success!
+        # Success! (100%)
         store.update_job(job_id, {
             "status": "completed",
             "progress": 100,
@@ -1742,9 +1729,7 @@ def process_git_push(job_id, commit_message, branch):
                 "success": True,
                 "message": f"Successfully pushed to {branch}",
                 "commit_message": commit_message,
-                "branch": branch,
-                "commit_output": commit_result.stdout.strip(),
-                "push_output": push_result.stdout.strip()
+                "branch": branch
             }
         })
         
@@ -1765,11 +1750,13 @@ def process_git_push(job_id, commit_message, branch):
 @app.post("/api/git/push")
 def git_push():
     """
-    Push changes to GitHub automatically
+    Push changes to GitHub automatically (async with job_id)
     Expects JSON: { "commit_message": "...", "branch": "main" }
+    Returns immediately with a job_id for status polling
     """
     try:
         import subprocess
+        import threading
         
         data = request.json or {}
         commit_message = data.get("commit_message", "🎨 Update from Visual Testing Tool")
@@ -1778,113 +1765,50 @@ def git_push():
         # Change to the project directory
         project_dir = BASE_DIR
         
-        # Execute git commands
-        result = {
-            "steps": [],
-            "success": False,
-            "error": None
-        }
-        
-        # Check if git repo exists
+        # Quick validation: Check if git repo exists
         check_git = subprocess.run(
             ["git", "rev-parse", "--git-dir"],
             cwd=project_dir,
             capture_output=True,
-            text=True
+            text=True,
+            timeout=5
         )
         
         if check_git.returncode != 0:
             return jsonify({
                 "success": False,
-                "error": "Not a git repository. Initialize git first.",
-                "steps": []
+                "error": "Not a git repository. Initialize git first."
             }), 400
         
-        # Stage all changes
-        add_result = subprocess.run(
-            ["git", "add", "."],
-            cwd=project_dir,
-            capture_output=True,
-            text=True
-        )
-        result["steps"].append({
-            "step": "git add",
-            "success": add_result.returncode == 0,
-            "output": add_result.stdout,
-            "error": add_result.stderr
+        # Create a background job
+        job_id = str(uuid.uuid4())
+        store.save_job(job_id, {
+            "type": "git_push",
+            "status": "running",
+            "progress": 0,
+            "step": "Initializing...",
+            "created_at": datetime.datetime.now().isoformat()
         })
         
-        # Check if there are changes to commit
-        status_result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=project_dir,
-            capture_output=True,
-            text=True
+        # Start background thread for git operations
+        thread = threading.Thread(
+            target=process_git_push,
+            args=(job_id, commit_message, branch),
+            daemon=True
         )
+        thread.start()
         
-        if not status_result.stdout.strip():
-            return jsonify({
-                "success": True,
-                "message": "No changes to commit",
-                "steps": result["steps"]
-            })
-        
-        # Commit changes
-        commit_result = subprocess.run(
-            ["git", "commit", "-m", commit_message],
-            cwd=project_dir,
-            capture_output=True,
-            text=True
-        )
-        result["steps"].append({
-            "step": "git commit",
-            "success": commit_result.returncode == 0,
-            "output": commit_result.stdout,
-            "error": commit_result.stderr
-        })
-        
-        if commit_result.returncode != 0:
-            return jsonify({
-                "success": False,
-                "error": "Failed to commit changes",
-                "steps": result["steps"]
-            }), 500
-        
-        # Push to remote
-        push_result = subprocess.run(
-            ["git", "push", "origin", branch],
-            cwd=project_dir,
-            capture_output=True,
-            text=True
-        )
-        result["steps"].append({
-            "step": "git push",
-            "success": push_result.returncode == 0,
-            "output": push_result.stdout,
-            "error": push_result.stderr
-        })
-        
-        if push_result.returncode != 0:
-            return jsonify({
-                "success": False,
-                "error": f"Failed to push to {branch}: {push_result.stderr}",
-                "steps": result["steps"]
-            }), 500
-        
-        result["success"] = True
+        # Return immediately with job_id
         return jsonify({
             "success": True,
-            "message": f"Successfully pushed to {branch}",
-            "steps": result["steps"],
-            "commit_message": commit_message,
-            "branch": branch
+            "job_id": job_id,
+            "message": "Git push started in background"
         })
         
     except Exception as e:
         return jsonify({
             "success": False,
-            "error": str(e),
-            "steps": []
+            "error": str(e)
         }), 500
 
 

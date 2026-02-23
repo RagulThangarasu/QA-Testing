@@ -117,7 +117,7 @@ async function executePush() {
 
 async function pollGitPushStatus(jobId, progressFill, statusText, pushBtn) {
     let attempts = 0;
-    const maxAttempts = 120; // 2 minutes with 1 second intervals
+    const maxAttempts = 240; // 2 minutes with 0.5 second intervals
 
     while (attempts < maxAttempts) {
         try {
@@ -125,7 +125,7 @@ async function pollGitPushStatus(jobId, progressFill, statusText, pushBtn) {
             const statusData = await statusResponse.json();
 
             if (!statusData) {
-                await sleep(1000);
+                await sleep(500);
                 attempts++;
                 continue;
             }
@@ -144,7 +144,7 @@ async function pollGitPushStatus(jobId, progressFill, statusText, pushBtn) {
                 showToast(`✅ Successfully pushed to GitHub! Automated tests will run shortly.`);
 
                 // Wait a bit then close modal
-                await sleep(1500);
+                await sleep(1000);
                 document.getElementById("git-push-modal").classList.add("hidden");
 
                 // Reset progress
@@ -176,13 +176,13 @@ async function pollGitPushStatus(jobId, progressFill, statusText, pushBtn) {
             }
 
             // Still running, wait and poll again
-            await sleep(1000);
+            await sleep(500);
             attempts++;
 
         } catch (error) {
             console.error("Polling error:", error);
             attempts++;
-            await sleep(1000);
+            await sleep(500);
         }
     }
 
