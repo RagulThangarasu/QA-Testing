@@ -218,6 +218,12 @@ form.addEventListener("submit", async (e) => {
   const enablePixelThreshold = document.getElementById("enable_pixel_threshold").checked;
   fd.set("enable_pixel_threshold", enablePixelThreshold ? "true" : "false");
 
+  if (enablePixelThreshold) {
+    const rawPercent = document.getElementById("pixel_threshold").value;
+    // Send raw percentage (0-100) — backend handles all threshold mapping
+    fd.set("pixel_threshold", parseInt(rawPercent, 10));
+  }
+
   try {
     const res = await fetch("/api/compare", { method: "POST", body: fd });
     const data = await res.json();
@@ -814,7 +820,29 @@ async function pollStatus(jobId) {
 
       // Render Issues List
       if (results.metrics.issues && results.metrics.issues.length > 0) {
-        const issuesHtml = results.metrics.issues.map(issue => `
+        const issuesHtml = results.metrics.issues.map(issue => {
+          // Determine category badge
+          const desc = issue.description || '';
+          let badge = '';
+          let badgeColor = '';
+          if (desc.includes('Spacing') || desc.includes('Margin') || desc.includes('Padding') || desc.includes('Gap') || desc.includes('Column')) {
+            badge = '📐 Spacing';
+            badgeColor = 'background:#dbeafe;color:#1d4ed8;';
+          } else if (desc.includes('Color') || desc.includes('Style')) {
+            badge = '🎨 Style';
+            badgeColor = 'background:#fed7aa;color:#9a3412;';
+          } else if (desc.includes('Content') || desc.includes('Text')) {
+            badge = '📝 Content';
+            badgeColor = 'background:#fef9c3;color:#854d0e;';
+          } else if (desc.includes('Missing') || desc.includes('Extra')) {
+            badge = '⚠️ Element';
+            badgeColor = 'background:#fce7f3;color:#9d174d;';
+          } else {
+            badge = '🔲 Layout';
+            badgeColor = 'background:#e9d5ff;color:#6b21a8;';
+          }
+
+          return `
           <div class="issue-card">
             <input type="checkbox" class="issue-checkbox" value="${issue.filename}" 
                    style="position:absolute; top:8px; left:8px; z-index:10; transform: scale(1.5);">
@@ -822,14 +850,17 @@ async function pollStatus(jobId) {
               <img src="/download/${results.job_id}/${issue.filename}" alt="${issue.label}"/>
             </div>
             <div class="issue-info">
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px; flex-wrap:wrap;">
+                <span style="font-size:0.72em; padding:2px 8px; border-radius:10px; font-weight:600; white-space:nowrap; ${badgeColor}">${badge}</span>
+              </div>
               <h4 title="${issue.full_label || issue.label}">${issue.full_label || issue.label}</h4>
               <p style="font-size: 0.8em; color: #ccc;">X=${issue.x}, Y=${issue.y} ${issue.dims ? '(' + issue.dims + ')' : ''}</p>
               <a href="/download/${results.job_id}/${issue.filename}" download class="btn-download-issue">Download Issue</a>
               <button onclick="window.openJiraReport('${jobId}', '${issue.filename}', '${(issue.label || "").replace(/'/g, "\\'")}', '${(issue.description || "").replace(/'/g, "\\'")}')" class="btn-secondary" style="font-size:12px; margin-top:5px; width:100%;">To Jira</button>
               <button onclick="window.openGitHubReport('${jobId}', '${issue.filename}', '${(issue.label || "").replace(/'/g, "\\'")}', '${(issue.description || "").replace(/'/g, "\\'")}')" class="btn-secondary" style="font-size:12px; margin-top:5px; width:100%; border: 1px solid #ccc; background: #f6f8fa; color: #333;">To GitHub</button>
             </div>
-          </div>
-        `).join("");
+          </div>`;
+        }).join("");
 
         const issuesContainer = document.createElement("div");
         issuesContainer.className = "issues-list";

@@ -66,7 +66,22 @@ def compare():
         reference_source = "upload"
 
     viewport = request.form.get("viewport", "desktop")
-    fullpage = request.form.get("fullpage", "true").lower() == "true"
+    
+    # Capture mode controls
+    capture_mode = request.form.get("capture_mode", "fullpage")
+    if capture_mode == "viewport":
+        fullpage = False
+    else:
+        fullpage = True
+    
+    max_capture_height = None
+    if capture_mode == "custom_height":
+        try:
+            max_capture_height = int(request.form.get("max_capture_height", "3000"))
+        except ValueError:
+            max_capture_height = 3000
+    
+    remove_selectors = request.form.get("remove_selectors", "")
     
     # Advanced options
     ignore_selectors = request.form.get("ignore_selectors", "")
@@ -93,6 +108,11 @@ def compare():
     else:
         pixel_threshold = None
 
+    # Validation options
+    check_layout = request.form.get("check_layout") == "on"
+    check_content = request.form.get("check_content") == "on"
+    check_colors = request.form.get("check_colors") == "on"
+
     component_selector = request.form.get("component_selector", "").strip() or None
 
     # Initialize job status
@@ -106,7 +126,6 @@ def compare():
         "result": None,
         "error": None,
         "stage_url": stage_url,
-        "stage_url": stage_url,
         "figma_path": figma_path,
         "reference_source": reference_source
     }
@@ -114,7 +133,7 @@ def compare():
 
 
     # Start background thread
-    thread = threading.Thread(target=process_comparison, args=(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors, wait_time, highlight_diffs, pixel_threshold, component_selector))
+    thread = threading.Thread(target=process_comparison, args=(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors, wait_time, highlight_diffs, pixel_threshold, component_selector, check_layout, check_content, check_colors, remove_selectors, max_capture_height))
     thread.start()
 
     return jsonify({"job_id": job_id})
@@ -287,18 +306,25 @@ def delete_broken_links_history():
 
 
 
-def process_comparison(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors_str="", wait_time=1000, highlight_diffs=True, pixel_threshold=None, component_selector=None):
+def process_comparison(job_id, figma_path, stage_url, viewport, fullpage, threshold, noise_tolerance, job_dir, ignore_selectors_str="", wait_time=1000, highlight_diffs=True, pixel_threshold=None, component_selector=None, check_layout=True, check_content=True, check_colors=True, remove_selectors_str="", max_capture_height=None):
     try:
         # 1) Screenshot
         store.save_job(job_id, {"step": "Capturing screenshot...", "progress": 10})
         
-        # Parse masks
+        # Parse masks (hide elements - visibility:hidden)
         mask_selectors = []
         if ignore_selectors_str:
             # Handle comma or newline separated
             import re
             parts = re.split(r'[,\n\r]+', ignore_selectors_str)
             mask_selectors = [p.strip() for p in parts if p.strip()]
+
+        # Parse remove selectors (completely remove from DOM - display:none)
+        remove_sels = []
+        if remove_selectors_str:
+            import re
+            parts = re.split(r'[,\n\r]+', remove_selectors_str)
+            remove_sels = [p.strip() for p in parts if p.strip()]
 
         stage_path = os.path.join(job_dir, "stage.png")
         try:
@@ -307,7 +333,9 @@ def process_comparison(job_id, figma_path, stage_url, viewport, fullpage, thresh
                               fullpage=fullpage, 
                               mask_selectors=mask_selectors,
                               wait_time=wait_time,
-                              selector=component_selector)
+                              selector=component_selector,
+                              remove_selectors=remove_sels,
+                              max_height=max_capture_height)
         except Exception as e:
             raise Exception(f"Screenshot failed: {e}")
         
@@ -315,7 +343,7 @@ def process_comparison(job_id, figma_path, stage_url, viewport, fullpage, thresh
 
         # 2) Compare
         try:
-            result = compare_images(figma_path, stage_path, job_dir, noise_tolerance=noise_tolerance, highlight_diffs=highlight_diffs, pixel_threshold=pixel_threshold)
+            result = compare_images(figma_path, stage_path, job_dir, noise_tolerance=noise_tolerance, highlight_diffs=highlight_diffs, pixel_threshold=pixel_threshold, check_layout=check_layout, check_content=check_content, check_colors=check_colors)
         except Exception as e:
             raise Exception(f"Comparison failed: {e}")
             
@@ -1634,6 +1662,13 @@ def process_git_push(job_id, commit_message, branch):
     
     project_dir = BASE_DIR
     
+    # Prevent git from opening any editor or interactive prompt
+    git_env = os.environ.copy()
+    git_env["GIT_TERMINAL_PROMPT"] = "0"
+    git_env["GIT_EDITOR"] = "true"
+    git_env["GIT_COMMITTER_NAME"] = git_env.get("GIT_COMMITTER_NAME", "Visual Testing Tool")
+    git_env["GIT_COMMITTER_EMAIL"] = git_env.get("GIT_COMMITTER_EMAIL", "vt@tool.local")
+    
     try:
         # Update status: Staging (10%)
         store.update_job(job_id, {
@@ -1642,13 +1677,14 @@ def process_git_push(job_id, commit_message, branch):
             "step": "Staging changes..."
         })
         
-        # Stage all changes (reduced timeout)
+        # Stage all changes
         add_result = subprocess.run(
             ["git", "add", "."],
             cwd=project_dir,
             capture_output=True,
             text=True,
-            timeout=15
+            timeout=15,
+            env=git_env
         )
         
         if add_result.returncode != 0:
@@ -1665,41 +1701,75 @@ def process_git_push(job_id, commit_message, branch):
             "step": "Committing changes..."
         })
         
-        # Commit changes (reduced timeout)
-        commit_result = subprocess.run(
-            ["git", "commit", "-m", commit_message],
+        # Check if there are changes to commit
+        status_result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
             cwd=project_dir,
             capture_output=True,
             text=True,
-            timeout=15
+            timeout=10,
+            env=git_env
         )
         
-        # Check if commit succeeded or if there were no changes
-        if commit_result.returncode != 0:
-            # Check if error is "nothing to commit"
-            if "nothing to commit" in commit_result.stdout or "nothing added to commit" in commit_result.stdout:
-                store.update_job(job_id, {
-                    "status": "completed",
-                    "progress": 100,
-                    "step": "No changes to commit",
-                    "result": {
-                        "success": True,
-                        "message": "No changes to commit",
-                        "skipped": True
-                    }
-                })
-                return
-            else:
-                store.update_job(job_id, {
-                    "status": "failed",
-                    "error": f"Failed to commit: {commit_result.stderr}",
-                    "progress": 100
-                })
-                return
+        has_staged_changes = status_result.returncode != 0  # returncode 1 = has changes
         
-        # Update status: Pushing (70%)
+        if has_staged_changes:
+            # Commit changes (with --no-edit to prevent editor from opening)
+            commit_result = subprocess.run(
+                ["git", "commit", "--no-edit", "-m", commit_message],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                env=git_env
+            )
+            
+            if commit_result.returncode != 0:
+                # Check if error is "nothing to commit"
+                combined = commit_result.stdout + commit_result.stderr
+                if "nothing to commit" in combined or "nothing added to commit" in combined:
+                    pass  # Fall through to push — there may be unpushed commits
+                else:
+                    store.update_job(job_id, {
+                        "status": "failed",
+                        "error": f"Failed to commit: {commit_result.stderr}",
+                        "progress": 100
+                    })
+                    return
+        
+        # Check if there are commits to push
+        ahead_result = subprocess.run(
+            ["git", "rev-list", "--count", f"origin/{branch}..HEAD"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=git_env
+        )
+        
+        commits_ahead = 0
+        if ahead_result.returncode == 0:
+            try:
+                commits_ahead = int(ahead_result.stdout.strip())
+            except ValueError:
+                commits_ahead = 0
+        
+        if commits_ahead == 0 and not has_staged_changes:
+            store.update_job(job_id, {
+                "status": "completed",
+                "progress": 100,
+                "step": "Nothing to push — already up to date",
+                "result": {
+                    "success": True,
+                    "message": "Already up to date, nothing to push",
+                    "skipped": True
+                }
+            })
+            return
+        
+        # Update status: Pushing (60%)
         store.update_job(job_id, {
-            "progress": 70,
+            "progress": 60,
             "step": f"Pushing to {branch}..."
         })
         
@@ -1709,13 +1779,23 @@ def process_git_push(job_id, commit_message, branch):
             cwd=project_dir,
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=120,
+            env=git_env
         )
         
         if push_result.returncode != 0:
+            error_msg = push_result.stderr.strip()
+            # Provide a user-friendly error
+            if "Could not resolve host" in error_msg:
+                error_msg = "No internet connection. Check your network and try again."
+            elif "Authentication failed" in error_msg or "403" in error_msg:
+                error_msg = "Authentication failed. Check your GitHub credentials."
+            elif "rejected" in error_msg:
+                error_msg = f"Push rejected. Pull remote changes first. Details: {error_msg}"
+            
             store.update_job(job_id, {
                 "status": "failed",
-                "error": f"Failed to push to {branch}: {push_result.stderr}",
+                "error": f"Failed to push: {error_msg}",
                 "progress": 100
             })
             return
@@ -1736,7 +1816,7 @@ def process_git_push(job_id, commit_message, branch):
     except subprocess.TimeoutExpired as e:
         store.update_job(job_id, {
             "status": "failed",
-            "error": f"Operation timed out: {str(e)}",
+            "error": "Operation timed out. Check your internet connection and try again.",
             "progress": 100
         })
     except Exception as e:

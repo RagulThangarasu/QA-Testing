@@ -180,6 +180,7 @@ def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_
     
     # SEO Failures
     if metrics.get('seo_details'):
+        for check in metrics['seo_details']:
             if not check['passed']:
                 text = f"<b>{check['name']}</b><br/>{check.get('details', '')}"
                 issues_data.append(['SEO', Paragraph(text, styles['Normal']), 'High'])
