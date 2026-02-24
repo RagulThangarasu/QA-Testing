@@ -291,6 +291,16 @@ navBaselines.addEventListener("click", (e) => {
   switchView("baselines");
 });
 
+document.getElementById("baselines-back").addEventListener("click", (e) => {
+  e.preventDefault();
+  switchView("run");
+});
+
+document.getElementById("history-back").addEventListener("click", (e) => {
+  e.preventDefault();
+  switchView("run");
+});
+
 window.deleteBaseline = async function (url) {
   if (!confirm(`Are you sure you want to delete the baseline for ${url}? This cannot be undone.`)) return;
 
@@ -412,18 +422,7 @@ async function loadHistory(page = 1) {
     const total = data.total !== undefined ? data.total : jobs.length;
 
 
-    // Add header interaction for bulk delete if not present
-    if (!document.getElementById("btnDelete")) {
-      const h1 = viewHistory.querySelector("h1");
-      const btn = document.createElement("button");
-      btn.id = "btnDelete";
-      btn.textContent = "Clear Selected";
-      btn.className = "btn-reject"; // reuse cancel style
-      btn.style.float = "right";
-      btn.style.fontSize = "14px";
-      btn.onclick = deleteSelected;
-      h1.appendChild(btn);
-    }
+
 
     if (!jobs || jobs.length === 0) {
       historyList.innerHTML = "<tr><td colspan='7'>No history found.</td></tr>";
@@ -465,6 +464,7 @@ async function loadHistory(page = 1) {
     const nextDisabled = page >= totalPages ? "disabled" : "";
 
     document.getElementById("pagination").innerHTML = `
+      <button class="btn-reject" style="font-size: 13px; padding: 4px 12px;" onclick="deleteSelected()">🗑️ Delete Selected</button>
       <span>Page ${page} of ${totalPages} (${total} total)</span>
       <div style="display: flex; gap: 10px;">
         <button class="btn-secondary" ${prevDisabled} onclick="loadHistory(${page - 1})" style="padding: 5px 10px; font-size: 14px;">&larr; Previous</button>

@@ -1076,13 +1076,11 @@ def process_seo_performance_test(job_id, page_url, test_type, device_type, job_d
         
         # Determine which categories to analyze
         categories = []
-        if test_type in ['both', 'seo']:
-            categories.extend(['seo', 'accessibility', 'best-practices'])
-        if test_type in ['both', 'performance']:
-            categories.append('performance')
-        
-        # If no specific type, analyze all
-        if not categories:
+        if test_type == 'seo':
+            categories = ['seo']
+        elif test_type == 'performance':
+            categories = ['performance']
+        else:
             categories = ['performance', 'seo', 'accessibility', 'best-practices']
         
         store.save_job(job_id, {"step": f"Running PageSpeed analysis ({device_type})...", "progress": 30})
@@ -1093,16 +1091,20 @@ def process_seo_performance_test(job_id, page_url, test_type, device_type, job_d
         
         store.save_job(job_id, {"step": "Processing results...", "progress": 70})
         
-        # Ensure we have the required fields based on test_type
-        if test_type == 'seo' and 'performance_score' not in metrics:
+        # In case the api returns null for not requested categories, explicitly setting them to None
+        if test_type == 'seo':
             metrics['performance_score'] = None
+            metrics['accessibility_score'] = None
+            metrics['best_practices_score'] = None
             metrics['load_time'] = None
             metrics['performance_details'] = []
-        
-        if test_type == 'performance' and 'seo_score' not in metrics:
+            
+        if test_type == 'performance':
             metrics['seo_score'] = None
+            metrics['accessibility_score'] = None
+            metrics['best_practices_score'] = None
             metrics['seo_details'] = []
-        
+            
         store.save_job(job_id, {"step": "Generating PDF report...", "progress": 85})
         
         # Generate PDF report
@@ -1168,11 +1170,11 @@ def process_seo_performance_batch(job_id, file_path, test_type, device_type, job
         
         # Determine categories
         categories = []
-        if test_type in ['both', 'seo']:
-            categories.extend(['seo', 'accessibility', 'best-practices'])
-        if test_type in ['both', 'performance']:
-            categories.append('performance')
-        if not categories:
+        if test_type == 'seo':
+            categories = ['seo']
+        elif test_type == 'performance':
+            categories = ['performance']
+        else:
             categories = ['performance', 'seo', 'accessibility', 'best-practices']
             
         strategy = 'mobile' if device_type == 'mobile' else 'desktop'
@@ -1354,7 +1356,7 @@ def process_seo_performance_batch(job_id, file_path, test_type, device_type, job
         
         # Create PDF Report
         from utils.seo_performance_report import generate_batch_seo_pdf
-        pdf_path = generate_batch_seo_pdf(results, job_id, job_dir)
+        pdf_path = generate_batch_seo_pdf(results, job_id, job_dir, test_type=test_type)
 
         final_result = {
             "total_processed": total_urls,
@@ -1399,11 +1401,11 @@ def process_seo_performance_sitemap(job_id, sitemap_url, test_type, device_type,
         
         # Determine categories
         categories = []
-        if test_type in ['both', 'seo']:
-            categories.extend(['seo', 'accessibility', 'best-practices'])
-        if test_type in ['both', 'performance']:
-            categories.append('performance')
-        if not categories:
+        if test_type == 'seo':
+            categories = ['seo']
+        elif test_type == 'performance':
+            categories = ['performance']
+        else:
             categories = ['performance', 'seo', 'accessibility', 'best-practices']
             
         strategy = 'mobile' if device_type == 'mobile' else 'desktop'
@@ -1436,7 +1438,7 @@ def process_seo_performance_sitemap(job_id, sitemap_url, test_type, device_type,
         
         # Create PDF Report
         from utils.seo_performance_report import generate_batch_seo_pdf
-        pdf_path = generate_batch_seo_pdf(results, job_id, job_dir)
+        pdf_path = generate_batch_seo_pdf(results, job_id, job_dir, test_type=test_type)
 
         final_result = {
             "total_processed": total_urls,
@@ -1502,6 +1504,291 @@ def delete_seo_performance_history():
     
     return jsonify({"message": f"Deleted {len(job_ids)} job(s)"}), 200
 
+
+
+# ─── HTML Semantic Validator Routes ───
+
+@app.get("/semantic")
+def semantic_page():
+    return app.send_static_file("semantic.html")
+
+
+@app.post("/api/semantic")
+def run_semantic_validation():
+    data = request.get_json()
+    input_type = data.get("input_type", "url")
+    page_url = data.get("page_url")
+    sitemap_url = data.get("sitemap_url")
+
+    if input_type == "sitemap":
+        if not sitemap_url:
+            return jsonify({"error": "Sitemap URL is required"}), 400
+    else:
+        if not page_url:
+            return jsonify({"error": "Page URL is required"}), 400
+
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = os.path.join(RUNS_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+
+    job_data = {
+        "job_id": job_id,
+        "type": "semantic_validation",
+        "page_url": sitemap_url if input_type == "sitemap" else page_url,
+        "input_type": input_type,
+        "status": "running",
+        "progress": 0,
+        "step": "Starting semantic validation...",
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "result": None
+    }
+    store.save_job(job_id, job_data)
+
+    if input_type == "sitemap":
+        thread = threading.Thread(
+            target=process_semantic_sitemap,
+            args=(job_id, sitemap_url, job_dir)
+        )
+    else:
+        thread = threading.Thread(
+            target=process_semantic_validation,
+            args=(job_id, page_url, job_dir)
+        )
+    thread.start()
+
+    return jsonify({"job_id": job_id})
+
+
+def process_semantic_sitemap(job_id, sitemap_url, job_dir):
+    import traceback
+    try:
+        store.save_job(job_id, {"step": "Fetching sitemap...", "progress": 5})
+
+        # Fetch and parse sitemap
+        import requests as req
+        from bs4 import BeautifulSoup
+        resp = req.get(sitemap_url, timeout=30, headers={"User-Agent": "QA-Testing-Framework/1.0"})
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "lxml-xml")
+
+        urls = [loc.text.strip() for loc in soup.find_all("loc") if loc.text.strip()]
+        if not urls:
+            # Try as sitemap index
+            sitemaps = [s.text.strip() for s in soup.find_all("sitemap")]
+            if sitemaps:
+                for sm_url in sitemaps[:5]:
+                    try:
+                        sm_resp = req.get(sm_url, timeout=30, headers={"User-Agent": "QA-Testing-Framework/1.0"})
+                        sm_soup = BeautifulSoup(sm_resp.text, "lxml-xml")
+                        urls.extend([loc.text.strip() for loc in sm_soup.find_all("loc")])
+                    except Exception:
+                        pass
+
+        if not urls:
+            store.save_job(job_id, {
+                "status": "failed",
+                "error": "No URLs found in sitemap.",
+                "progress": 100,
+                "step": "Failed"
+            })
+            return
+
+        # Cap at 50 pages to avoid excessive validation time
+        urls = urls[:50]
+        total = len(urls)
+        store.save_job(job_id, {"step": f"Found {total} URLs. Starting validation...", "progress": 10})
+
+        from utils.semantic_validator import validate_html_semantics
+
+        pages = []
+        for idx, url in enumerate(urls):
+            pct = 10 + int((idx / total) * 70)
+            store.save_job(job_id, {
+                "step": f"Validating page {idx + 1} of {total}: {url[:60]}...",
+                "progress": pct
+            })
+
+            try:
+                result = validate_html_semantics(url)
+                pages.append(result)
+            except Exception as e:
+                pages.append({
+                    "url": url,
+                    "success": False,
+                    "error": str(e),
+                    "score": 0,
+                    "total_issues": 0,
+                    "critical": 0,
+                    "warnings": 0,
+                    "info": 0,
+                    "issues": []
+                })
+
+        # Aggregate results
+        store.save_job(job_id, {"step": "Generating aggregate report...", "progress": 85})
+
+        scores = [p.get("score", 0) for p in pages if p.get("success")]
+        avg_score = round(sum(scores) / len(scores)) if scores else 0
+
+        batch_result = {
+            "batch": True,
+            "sitemap_url": sitemap_url,
+            "total_pages": total,
+            "average_score": avg_score,
+            "total_issues": sum(p.get("total_issues", 0) for p in pages),
+            "total_critical": sum(p.get("critical", 0) for p in pages),
+            "total_warnings": sum(p.get("warnings", 0) for p in pages),
+            "total_info": sum(p.get("info", 0) for p in pages),
+            "pages": pages
+        }
+
+        # Generate PDF report for the batch
+        store.save_job(job_id, {"step": "Generating PDF report...", "progress": 90})
+        try:
+            from utils.semantic_report import generate_semantic_report
+            # Create a summary result for the PDF
+            summary_for_pdf = {
+                "url": f"Sitemap: {sitemap_url}",
+                "score": avg_score,
+                "total_issues": batch_result["total_issues"],
+                "critical": batch_result["total_critical"],
+                "warnings": batch_result["total_warnings"],
+                "info": batch_result["total_info"],
+                "status_code": 200,
+                "html_size": 0,
+                "element_summary": {},
+                "category_counts": {},
+                "issues": [],
+                "success": True
+            }
+            # Aggregate category counts and issues from all pages
+            all_issues = []
+            cat_counts = {}
+            for p in pages:
+                for issue in p.get("issues", []):
+                    tagged_issue = dict(issue)
+                    short_url = p.get("url", "")
+                    if len(short_url) > 50:
+                        short_url = short_url[:50] + "..."
+                    tagged_issue["message"] = f"[{short_url}] {issue.get('message', '')}"
+                    all_issues.append(tagged_issue)
+                for cat, count in p.get("category_counts", {}).items():
+                    cat_counts[cat] = cat_counts.get(cat, 0) + count
+
+            summary_for_pdf["issues"] = all_issues[:200]  # Cap for PDF size
+            summary_for_pdf["category_counts"] = cat_counts
+
+            pdf_path = generate_semantic_report(summary_for_pdf, job_id, job_dir)
+            batch_result["pdf_report_url"] = f"/download/{job_id}/{os.path.basename(pdf_path)}"
+        except Exception as pdf_err:
+            batch_result["pdf_error"] = str(pdf_err)
+
+        store.save_job(job_id, {
+            "result": batch_result,
+            "status": "completed",
+            "progress": 100,
+            "step": "Done"
+        })
+
+    except Exception as e:
+        error_details = f"{str(e)}\n{traceback.format_exc()}"
+        store.save_job(job_id, {
+            "status": "failed",
+            "error": error_details,
+            "progress": 100,
+            "step": "Failed"
+        })
+
+
+def process_semantic_validation(job_id, page_url, job_dir):
+    import traceback
+    try:
+        store.save_job(job_id, {"step": "Fetching and parsing HTML...", "progress": 10})
+
+        from utils.semantic_validator import validate_html_semantics
+        store.save_job(job_id, {"step": "Running semantic checks...", "progress": 30})
+
+        result = validate_html_semantics(page_url)
+
+        if not result.get("success"):
+            store.save_job(job_id, {
+                "status": "failed",
+                "error": result.get("error", "Validation failed"),
+                "progress": 100,
+                "step": "Failed"
+            })
+            return
+
+        store.save_job(job_id, {"step": "Generating PDF report...", "progress": 75})
+
+        # Generate PDF report
+        from utils.semantic_report import generate_semantic_report
+        pdf_path = generate_semantic_report(result, job_id, job_dir)
+        result["pdf_report_url"] = f"/download/{job_id}/{os.path.basename(pdf_path)}"
+
+        store.save_job(job_id, {
+            "result": result,
+            "status": "completed",
+            "progress": 100,
+            "step": "Done"
+        })
+
+    except Exception as e:
+        error_details = f"{str(e)}\n{traceback.format_exc()}"
+        store.save_job(job_id, {
+            "status": "failed",
+            "error": error_details,
+            "progress": 100,
+            "step": "Failed"
+        })
+
+
+@app.get("/api/semantic/history")
+def get_semantic_history():
+    jobs = store.list_jobs()
+    semantic_jobs = [j for j in jobs if j.get("type") == "semantic_validation"]
+
+    try:
+        page = int(request.args.get("page", 1))
+        limit = int(request.args.get("limit", 10))
+    except ValueError:
+        page = 1
+        limit = 10
+
+    if page < 1:
+        page = 1
+    if limit < 1:
+        limit = 10
+
+    start = (page - 1) * limit
+    end = start + limit
+
+    paginated_jobs = semantic_jobs[start:end]
+
+    return jsonify({
+        "jobs": paginated_jobs,
+        "total": len(semantic_jobs),
+        "page": page,
+        "limit": limit
+    })
+
+
+@app.delete("/api/semantic/history")
+def delete_semantic_history():
+    data = request.get_json()
+    job_ids = data.get("job_ids", [])
+
+    if not job_ids:
+        return jsonify({"error": "No job IDs provided"}), 400
+
+    for jid in job_ids:
+        store.delete_job(jid)
+        jdir = os.path.join(RUNS_DIR, jid)
+        if os.path.exists(jdir):
+            import shutil
+            shutil.rmtree(jdir)
+
+    return jsonify({"message": f"Deleted {len(job_ids)} job(s)"}), 200
 
 
 # Jira Integration Routes

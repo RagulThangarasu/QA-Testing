@@ -15,25 +15,30 @@
 
 <body>
   <header>
+    <div class="header-brand">
+      <div class="header-brand-text">
+        <span class="header-brand-name">QA Testing Framework</span>
+        <span class="header-brand-tagline">Intelligent Visual Regression Platform</span>
+      </div>
+    </div>
     <nav>
       <a href="/" id="nav-run" class="active">Visual Testing</a>
       <a href="/broken-links">Broken Links</a>
       <a href="/accessibility">Accessibility</a>
       <a href="/seo-performance">SEO & Performance</a>
-
+      <a href="/semantic">HTML Semantic</a>
+      <span class="nav-divider"></span>
       <button id="nav-jira" class="btn-secondary"
-        style="font-size: 14px; padding: 6px 12px; cursor: pointer; border: 1px solid #374151; background: #1f2937; color: #fff; margin-left: 20px;">Jira
-        Config</button>
+        style="font-size: 13px; padding: 5px 10px; cursor: pointer; border: 1px solid #374151; background: #1f2937; color: #94a3b8; border-radius: 6px;">Jira</button>
       <button id="nav-github" class="btn-secondary"
-        style="font-size: 14px; padding: 6px 12px; cursor: pointer; border: 1px solid #374151; background: #24292e; color: #fff; margin-left: 10px;">GitHub
-        Config</button>
+        style="font-size: 13px; padding: 5px 10px; cursor: pointer; border: 1px solid #374151; background: #1f2937; color: #94a3b8; border-radius: 6px;">GitHub</button>
     </nav>
   </header>
   <main class="container">
     <div id="view-run">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
         <h1 style="margin: 0;">Visual Testing Studio</h1>
-        <div style="display: flex; align-items: center; gap: 15px;">
+        <div style="display: flex; align-items: center; gap: 24px;">
           <button id="btn-push-github" class="btn-primary"
             style="font-size: 14px; padding: 8px 16px; cursor: pointer; background: #238636; border: 1px solid #2ea043; display: flex; align-items: center; gap: 6px;">
             <span>🚀</span>
@@ -81,11 +86,8 @@
         <div class="row">
           <label>Viewport
             <select name="viewport" id="viewport">
-              <option value="desktop">Desktop (1366x768)</option>
               <option value="mobile">Mobile (390x844)</option>
-              <option value="1280x800">1280x800</option>
               <option value="1440x900" selected>1440x900</option>
-              <option value="1920x1080">1920x1080</option>
             </select>
           </label>
 
@@ -99,7 +101,7 @@
 
 
 
-          <label>Pass Threshold (SSIM)
+          <label style="display: none;">Pass Threshold (SSIM)
             <input type="number" id="threshold" name="threshold" min="0.5" max="0.99" step="0.01" value="0.85" />
           </label>
         </div>
@@ -355,7 +357,14 @@
     </div>
 
     <div id="view-history" class="hidden">
-      <h1>Test History</h1>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+        <h1 style="margin: 0;">Test History</h1>
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div id="history-actions"></div>
+          <a href="#" id="history-back" style="color: var(--accent); text-decoration: none; font-weight: 500;">&larr;
+            Back</a>
+        </div>
+      </div>
 
       <div class="filters">
         <button class="filter-btn active" onclick="filterHistory('all', this)">All</button>
@@ -385,7 +394,11 @@
     </div>
 
     <div id="view-baselines" class="hidden">
-      <h1>Baseline Management</h1>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+        <h1 style="margin: 0;">Baseline Management</h1>
+        <a href="#" id="baselines-back" style="color: var(--accent); text-decoration: none; font-weight: 500;">&larr;
+          Back</a>
+      </div>
       <div id="baselines-list" class="grid-baselines"></div>
     </div>
 
@@ -517,6 +530,15 @@
       </div>
     </div>
   </main>
+
+  <footer class="patent-footer">
+    <div class="patent-footer-left">
+      <span>© 2026 QA Testing Framework — All Rights Reserved</span>
+    </div>
+    <div class="patent-footer-right">
+      Intelligent Web QA System v2.0 | Computer-Vision-Based Visual Regression Analysis
+    </div>
+  </footer>
 
   <script src="/static/app.js?v=5"></script>
   <script src="/static/jira_integration.js"></script>

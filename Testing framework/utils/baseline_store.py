@@ -150,6 +150,13 @@ class BaselineStore:
                     found = True
                     break
             
+            if found:
+                data[key]["active_version_id"] = version_id
+                self._save(data)
+                return True
+            
+            return False
+            
     def delete_baseline(self, url):
         with self.lock:
             data = self._load()

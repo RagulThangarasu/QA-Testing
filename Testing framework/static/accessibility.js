@@ -88,16 +88,7 @@ async function loadHistory(page = 1) {
         const jobs = Array.isArray(data) ? data : data.jobs;
         const total = data.total !== undefined ? data.total : jobs.length;
 
-        if (!document.getElementById("btnDelete")) {
-            const h1 = viewHistory.querySelector("h1");
-            const btn = document.createElement("button");
-            btn.id = "btnDelete";
-            btn.textContent = "Clear Selected";
-            btn.className = "btn-reject";
-            btn.style.marginLeft = "auto";
-            btn.onclick = deleteSelected;
-            h1.parentElement.insertBefore(btn, h1.nextSibling);
-        }
+
 
         if (jobs.length === 0) {
             historyList.innerHTML = "<tr><td colspan='6'>No history yet.</td></tr>";
@@ -133,18 +124,20 @@ async function loadHistory(page = 1) {
 }
 
 function renderPagination(total, page) {
-    const totalPages = Math.ceil(total / LIMIT);
-    if (totalPages <= 1) return;
+    const totalPages = Math.ceil(total / LIMIT) || 1;
 
     const paginationDiv = document.getElementById("pagination");
 
-    const prevDisabled = page === 1 ? "disabled" : "";
-    const nextDisabled = page === totalPages ? "disabled" : "";
+    const prevDisabled = page <= 1 ? "disabled" : "";
+    const nextDisabled = page >= totalPages ? "disabled" : "";
 
     paginationDiv.innerHTML = `
-        <button class="btn-secondary" ${prevDisabled} onclick="loadHistory(${page - 1})" style="padding: 5px 10px; font-size: 14px;">&larr; Previous</button>
+        <button class="btn-reject" style="font-size: 13px; padding: 4px 12px;" onclick="deleteSelected()">🗑️ Delete Selected</button>
         <span>Page ${page} of ${totalPages}</span>
-        <button class="btn-secondary" ${nextDisabled} onclick="loadHistory(${page + 1})" style="padding: 5px 10px; font-size: 14px;">Next &rarr;</button>
+        <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary" ${prevDisabled} onclick="loadHistory(${page - 1})" style="padding: 5px 10px; font-size: 14px;">&larr; Previous</button>
+            <button class="btn-secondary" ${nextDisabled} onclick="loadHistory(${page + 1})" style="padding: 5px 10px; font-size: 14px;">Next &rarr;</button>
+        </div>
     `;
 }
 

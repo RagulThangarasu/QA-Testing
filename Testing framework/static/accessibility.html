@@ -13,14 +13,21 @@
 
 <body>
     <header>
+        <div class="header-brand">
+            <div class="header-brand-text">
+                <span class="header-brand-name">QA Testing Framework</span>
+                <span class="header-brand-tagline">Intelligent Visual Regression Platform</span>
+            </div>
+        </div>
         <nav>
             <a href="/">Visual Testing</a>
             <a href="/broken-links">Broken Links</a>
             <a href="/accessibility" class="active">Accessibility</a>
-            <a href="/seo-performance">SEO & Performance</a>
+            <a href="/seo-performance">SEO &amp; Performance</a>
+            <a href="/semantic">HTML Semantic</a>
+            <span class="nav-divider"></span>
             <button id="nav-jira" class="btn-secondary"
-                style="font-size: 14px; padding: 6px 12px; cursor: pointer; border: 1px solid #374151; background: #1f2937; color: #fff; margin-left: 20px;">Jira
-                Config</button>
+                style="font-size: 13px; padding: 5px 10px; cursor: pointer; border: 1px solid #374151; background: #1f2937; color: #94a3b8; border-radius: 6px;">Jira</button>
         </nav>
     </header>
     <main class="container">
@@ -32,7 +39,7 @@
                         Scan your website for WCAG 2.1 compliance and accessibility issues.
                     </p>
                 </div>
-                <div style="display: flex; gap: 15px; align-items: center;">
+                <div style="display: flex; gap: 24px; align-items: center;">
                     <button id="btn-clear" class="btn-reject"
                         style="text-decoration: none; font-size: 14px; padding: 6px 12px;">Clear</button>
                     <a href="#" id="nav-history"
@@ -89,7 +96,7 @@
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                 <h1 style="margin: 0;">Accessibility History</h1>
                 <a href="#" id="nav-run" style="color: var(--accent); text-decoration: none; font-weight: 500;">&larr;
-                    Back to Testing</a>
+                    Back</a>
             </div>
             <table>
                 <thead>
@@ -140,6 +147,15 @@
             </div>
         </div>
     </main>
+
+    <footer class="patent-footer">
+        <div class="patent-footer-left">
+            <span>© 2026 QA Testing Framework — All Rights Reserved</span>
+        </div>
+        <div class="patent-footer-right">
+            Intelligent Web QA System v2.0 | Computer-Vision-Based Visual Regression Analysis
+        </div>
+    </footer>
 
     <script src="/static/accessibility.js"></script>
     <script src="/static/jira_integration.js"></script>

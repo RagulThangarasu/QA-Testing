@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>HTML Semantic Validator — QA Testing Framework</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description"
+        content="Validate HTML semantic structure, accessibility, and best practices for any URL" />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/header.css" />
+    <link rel="stylesheet" href="/static/loader.css" />
+    <link rel="stylesheet" href="/static/toggle.css" />
+    <style>
+        /* Semantic Validator Specific Styles */
+        .score-circle {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            position: relative;
+            background: conic-gradient(var(--score-color) calc(var(--score-pct) * 1%), #1e293b calc(var(--score-pct) * 1%));
+            animation: scoreReveal 1.2s ease-out forwards;
+        }
+
+        .score-circle::before {
+            content: '';
+            position: absolute;
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            background: var(--bg);
+        }
+
+        .score-value {
+            position: relative;
+            z-index: 1;
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--fg);
+            line-height: 1;
+        }
+
+        .score-label {
+            position: relative;
+            z-index: 1;
+            font-size: 0.75rem;
+            color: var(--muted);
+            margin-top: 2px;
+            font-weight: 500;
+        }
+
+        @keyframes scoreReveal {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .stat-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: #121b33;
+            border: 1px solid #24325a;
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: #3b82f6;
+        }
+
+        .stat-card .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            display: block;
+        }
+
+        .stat-card .stat-label {
+            font-size: 0.78rem;
+            color: var(--muted);
+            margin-top: 4px;
+            display: block;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card.critical .stat-value {
+            color: #ef4444;
+        }
+
+        .stat-card.warning .stat-value {
+            color: #f59e0b;
+        }
+
+        .stat-card.info .stat-value {
+            color: #3b82f6;
+        }
+
+        .stat-card.total .stat-value {
+            color: #a78bfa;
+        }
+
+        /* Category pills */
+        .category-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 16px 0;
+        }
+
+        .category-pill {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 0.82rem;
+            color: var(--muted);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .category-pill:hover,
+        .category-pill.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: white;
+        }
+
+        .category-pill .pill-count {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 1px 7px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Issue cards */
+        .issue-card {
+            background: #0f1930;
+            border: 1px solid #24325a;
+            border-left: 4px solid #3b82f6;
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+            animation: issueSlideIn 0.3s ease-out forwards;
+            opacity: 0;
+        }
+
+        .issue-card:hover {
+            border-color: #3b82f6;
+            background: #121b33;
+        }
+
+        @keyframes issueSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .issue-card.critical {
+            border-left-color: #ef4444;
+        }
+
+        .issue-card.warning {
+            border-left-color: #f59e0b;
+        }
+
+        .issue-card.info {
+            border-left-color: #3b82f6;
+        }
+
+        .issue-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .severity-badge {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .severity-badge.critical {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+
+        .severity-badge.warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fcd34d;
+        }
+
+        .severity-badge.info {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+        }
+
+        .issue-message {
+            font-weight: 600;
+            font-size: 0.92rem;
+            color: var(--fg);
+        }
+
+        .issue-detail {
+            font-size: 0.84rem;
+            color: var(--muted);
+            margin-top: 4px;
+            line-height: 1.5;
+        }
+
+        .issue-meta {
+            display: flex;
+            gap: 14px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .issue-meta-item {
+            font-size: 0.76rem;
+            color: #6b7280;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .issue-meta-item code {
+            background: #1e293b;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.72rem;
+            color: #a78bfa;
+        }
+
+        .issue-meta-item .wcag-badge {
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: #10b981;
+            font-weight: 600;
+            font-size: 0.72rem;
+        }
+
+        /* Element summary */
+        .element-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .element-tag {
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-family: 'SF Mono', Monaco, monospace;
+            color: #a78bfa;
+            transition: all 0.2s;
+        }
+
+        .element-tag:hover {
+            border-color: #6366f1;
+            background: #2d1f5e;
+        }
+
+        .element-tag .tag-count {
+            color: #6b7280;
+            margin-left: 4px;
+        }
+
+        /* Summary grid */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .summary-box {
+            background: #121b33;
+            border: 1px solid #24325a;
+            border-radius: 10px;
+            padding: 16px;
+        }
+
+        .summary-box h4 {
+            margin: 0 0 10px 0;
+            color: var(--muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Semantic ratio bar */
+        .ratio-bar {
+            height: 8px;
+            background: #1e293b;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .ratio-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 1s ease-out;
+            background: linear-gradient(90deg, #3b82f6, #6366f1);
+        }
+
+        /* Results section */
+        .results-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .results-header h2 {
+            margin: 0;
+            font-size: 1.3rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .stat-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="header-brand">
+            <div class="header-brand-text">
+                <span class="header-brand-name">QA Testing Framework</span>
+                <span class="header-brand-tagline">Intelligent Visual Regression Platform</span>
+            </div>
+        </div>
+        <nav>
+            <a href="/">Visual Testing</a>
+            <a href="/broken-links">Broken Links</a>
+            <a href="/accessibility">Accessibility</a>
+            <a href="/seo-performance">SEO &amp; Performance</a>
+            <a href="/semantic" class="active">HTML Semantic</a>
+            <span class="nav-divider"></span>
+            <button id="nav-jira" class="btn-secondary"
+                style="font-size: 13px; padding: 5px 10px; cursor: pointer; border: 1px solid #374151; background: #1f2937; color: #94a3b8; border-radius: 6px;">Jira</button>
+        </nav>
+    </header>
+    <main class="container">
+        <div id="view-run">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <div>
+                    <h1 style="margin: 0;">🏷️ HTML Semantic Validator</h1>
+                    <p style="color: var(--muted); margin-top: 5px; margin-bottom: 0;">
+                        Analyze your webpage for proper HTML5 semantic structure, accessibility, and best practices.
+                    </p>
+                </div>
+                <div style="display: flex; gap: 24px; align-items: center;">
+                    <button id="btn-clear" class="btn-reject"
+                        style="text-decoration: none; font-size: 14px; padding: 6px 12px;">Clear</button>
+                    <a href="#" id="nav-history"
+                        style="color: var(--accent); text-decoration: none; font-weight: 500;">History &rarr;</a>
+                </div>
+            </div>
+
+            <form id="semanticForm">
+                <div class="toggle-switch" style="gap: 5px; margin-bottom: 20px;">
+                    <label>
+                        <input type="radio" name="inputType" value="url" checked onchange="toggleInputType()">
+                        Single Page URL
+                    </label>
+                    <label>
+                        <input type="radio" name="inputType" value="sitemap" onchange="toggleInputType()">
+                        Sitemap URL (All Pages)
+                    </label>
+                </div>
+
+                <div id="urlInputContainer">
+                    <label>Page URL
+                        <input type="url" id="url" name="page_url" placeholder="https://example.com/page" />
+                    </label>
+                </div>
+
+                <div id="sitemapInputContainer" class="hidden">
+                    <label>Sitemap URL
+                        <input type="url" id="sitemap" name="sitemap_url"
+                            placeholder="https://example.com/sitemap.xml" />
+                    </label>
+                </div>
+
+                <details
+                    style="margin-top: 5px; border: 1px solid #24325a; padding: 12px; border-radius: 8px; background: #0f1930;">
+                    <summary style="cursor: pointer; font-weight: 600; color: var(--muted);">Advanced Options ⚙️
+                    </summary>
+                    <div style="margin-top: 12px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" name="check_deprecated" checked> Check Deprecated / Non-Semantic
+                            Elements
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px;">
+                            <input type="checkbox" name="check_meta" checked> Check SEO & Meta Tags
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px;">
+                            <input type="checkbox" name="check_aria" checked> Check ARIA Usage
+                        </label>
+                    </div>
+                </details>
+
+                <button type="submit">🔍 Validate Semantics</button>
+            </form>
+
+            <script>
+                function toggleInputType() {
+                    const inputType = document.querySelector('input[name="inputType"]:checked').value;
+                    document.getElementById('urlInputContainer').classList.toggle('hidden', inputType !== 'url');
+                    document.getElementById('sitemapInputContainer').classList.toggle('hidden', inputType !== 'sitemap');
+                }
+            </script>
+
+            <div id="loader" class="loader-container hidden">
+                <div class="progress-bar-bg">
+                    <div id="progressFill" class="progress-bar-fill"></div>
+                </div>
+                <div id="statusText" class="status-text">0% - Starting...</div>
+            </div>
+
+            <div id="results" class="hidden" style="margin-top: 24px;"></div>
+        </div>
+
+        <!-- History View -->
+        <div id="view-history" class="hidden">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h1 style="margin: 0;">Semantic Validation History</h1>
+                <a href="#" id="nav-run" style="color: var(--accent); text-decoration: none; font-weight: 500;">&larr;
+                    Back</a>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th width="40"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"></th>
+                        <th>Date</th>
+                        <th>URL</th>
+                        <th>Score</th>
+                        <th>Issues</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="history-list"></tbody>
+            </table>
+            <div id="pagination"
+                style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;"></div>
+        </div>
+
+        <div id="toast" class="toast hidden"></div>
+
+        <!-- Jira Modals -->
+        <div id="jira-config-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Jira Configuration</h3>
+                <label>Server URL <input type="text" id="jira-server"
+                        placeholder="https://your-domain.atlassian.net"></label>
+                <label>Email <input type="email" id="jira-email" placeholder="email@example.com"></label>
+                <label>API Token <input type="password" id="jira-token" placeholder="API Token"></label>
+                <label>Project Key <input type="text" id="jira-project" placeholder="PROJ"></label>
+                <div class="modal-actions">
+                    <button id="btnSaveJira">Save & Test</button>
+                    <button onclick="document.getElementById('jira-config-modal').classList.add('hidden')"
+                        class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="jira-report-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Report to Jira</h3>
+                <label>Summary <input type="text" id="jira-summary"></label>
+                <label>Description <textarea id="jira-desc" rows="5"></textarea></label>
+                <div class="modal-actions">
+                    <button id="btnSendJira">Create Issue</button>
+                    <button onclick="document.getElementById('jira-report-modal').classList.add('hidden')"
+                        class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="patent-footer">
+        <div class="patent-footer-left">
+            <span>© 2026 QA Testing Framework — All Rights Reserved</span>
+        </div>
+        <div class="patent-footer-right">
+            Intelligent Web QA System v2.0 | Computer-Vision-Based Visual Regression Analysis
+        </div>
+    </footer>
+
+    <script src="/static/semantic.js"></script>
+    <script src="/static/jira_integration.js"></script>
+</body>
+
+</html>

@@ -55,7 +55,13 @@ def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_
     )
     
     # Title
-    title = Paragraph("SEO & Performance Report", title_style)
+    report_title = "SEO & Performance Report"
+    if test_type == "seo":
+        report_title = "SEO Report"
+    elif test_type == "performance":
+        report_title = "Performance Report"
+        
+    title = Paragraph(report_title, title_style)
     elements.append(title)
     elements.append(Spacer(1, 12))
     
@@ -119,6 +125,23 @@ def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_
             if score >= 0.9: pass_count += 1
             else: fail_count += 1
             
+    # Prepare Chart Categories dynamically
+    chart_data = []
+    chart_labels = []
+    
+    if test_type in ['seo', 'both'] or s_seo > 0:
+        chart_data.append(s_seo)
+        chart_labels.append('SEO')
+    if test_type in ['performance', 'both'] or s_perf > 0:
+        chart_data.append(s_perf)
+        chart_labels.append('Performance')
+    if test_type == 'both' or s_acc > 0:
+        chart_data.append(s_acc)
+        chart_labels.append('Accessibility')
+    if test_type == 'both' or s_best > 0:
+        chart_data.append(s_best)
+        chart_labels.append('Best Pract.')
+        
     # Draw Bar Chart (Scores)
     d_bar = Drawing(400, 200)
     bc = VerticalBarChart()
@@ -126,12 +149,12 @@ def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_
     bc.y = 50
     bc.height = 125
     bc.width = 300
-    bc.data = [[s_seo, s_perf, s_acc, s_best]]
+    bc.data = [chart_data]
     bc.valueAxis.valueMin = 0
     bc.valueAxis.valueMax = 100
     bc.valueAxis.valueStep = 20
     bc.categoryAxis.labels.boxAnchor = 'ne'
-    bc.categoryAxis.categoryNames = ['SEO', 'Performance', 'Accessibility', 'Best Pract.']
+    bc.categoryAxis.categoryNames = chart_labels
     bc.bars[0].fillColor = colors.HexColor("#2563eb")
     
     d_bar.add(bc)
@@ -318,7 +341,7 @@ def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_
     
     return pdf_path
     
-def generate_batch_seo_pdf(results, job_id, output_dir):
+def generate_batch_seo_pdf(results, job_id, output_dir, test_type='both'):
     """
     Generate a summary PDF for batch SEO/Performance jobs
     """
@@ -328,7 +351,13 @@ def generate_batch_seo_pdf(results, job_id, output_dir):
     styles = getSampleStyleSheet()
     
     # Title
-    elements.append(Paragraph("Batch SEO & Performance Report", styles['Title']))
+    report_title = "Batch SEO & Performance Report"
+    if test_type == "seo":
+        report_title = "Batch SEO Report"
+    elif test_type == "performance":
+        report_title = "Batch Performance Report"
+        
+    elements.append(Paragraph(report_title, styles['Title']))
     elements.append(Paragraph(f"Job ID: {job_id} | Date: {datetime.now().strftime('%Y-%m-%d')}", styles['Normal']))
     elements.append(Spacer(1, 20))
     

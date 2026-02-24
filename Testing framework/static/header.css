@@ -1,34 +1,164 @@
-/* Header & Navbar */
+/* ═══════════════════════════════════════════════════════════
+   Header & Footer — Premium Branded Navigation
+   ═══════════════════════════════════════════════════════════ */
+
 header {
-  background: #121b33;
-  border-bottom: 1px solid #24325a;
-  padding: 1rem 2rem;
+  background: rgba(8, 13, 25, 0.85);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.12);
+  padding: 0 2rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+  animation: headerSlideDown 0.5s ease-out;
 }
 
+@keyframes headerSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Brand Logo */
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0.65rem 0;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+
+.header-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.header-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+.header-brand-tagline {
+  font-size: 10px;
+  color: #475569;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+
+
+/* Nav Links */
 header nav {
   display: flex;
-  gap: 20px;
+  gap: 3px;
+  align-items: center;
 }
 
 header nav a {
-  color: var(--muted);
+  color: #64748b;
   text-decoration: none;
   font-weight: 500;
-  transition: color 0.2s;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  font-size: 13px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 8px 12px;
+  border-radius: 8px;
+  position: relative;
+  white-space: nowrap;
 }
 
 header nav a:hover {
-  color: var(--fg);
-  background: rgba(255, 255, 255, 0.05);
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 header nav a.active {
-  color: var(--accent);
-  background: rgba(105, 210, 255, 0.1);
+  color: #ffffff;
+  background: rgba(59, 130, 246, 0.12);
   font-weight: 600;
+}
+
+header nav a.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50%;
+  height: 2px;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  border-radius: 2px;
+  animation: activeUnderline 0.3s ease-out;
+}
+
+@keyframes activeUnderline {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+
+  to {
+    width: 50%;
+    opacity: 1;
+  }
+}
+
+/* Nav Divider */
+.nav-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(148, 163, 184, 0.12);
+  margin: 0 6px;
+}
+
+/* ── Footer ── */
+.patent-footer {
+  background: rgba(8, 13, 25, 0.95);
+  border-top: 1px solid rgba(59, 130, 246, 0.08);
+  padding: 10px 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #334155;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 99;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.patent-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.patent-footer-right {
+  color: #1e293b;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+body {
+  padding-bottom: 44px;
 }
