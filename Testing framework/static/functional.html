@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>AI Functional Testing — QA Testing Framework</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description"
+        content="AI-driven functional testing with plain-English test cases. Zero locators. Powered by local Ollama LLM." />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/header.css" />
+    <link rel="stylesheet" href="/static/loader.css" />
+    <link rel="stylesheet" href="/static/toggle.css" />
+    <style>
+        /* ── AI Functional Testing Specific Styles ── */
+
+        .ai-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .ai-badge.connected {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .ai-badge.disconnected {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .ai-badge .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            animation: dotPulse 2s ease-in-out infinite;
+        }
+
+        .ai-badge.connected .dot {
+            background: #34d399;
+        }
+
+        .ai-badge.disconnected .dot {
+            background: #f87171;
+            animation: none;
+        }
+
+        @keyframes dotPulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        /* Upload section */
+        .upload-zone {
+            border: 2px dashed rgba(59, 130, 246, 0.25);
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            background: rgba(59, 130, 246, 0.03);
+        }
+
+        .upload-zone:hover,
+        .upload-zone.drag-over {
+            border-color: var(--accent);
+            background: rgba(59, 130, 246, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .upload-zone .upload-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .upload-zone .upload-text {
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+
+        .upload-zone .upload-text strong {
+            color: var(--accent);
+        }
+
+        .upload-zone .file-info {
+            margin-top: 10px;
+            color: #34d399;
+            font-weight: 600;
+            font-size: 0.88rem;
+            display: none;
+        }
+
+        /* Template download */
+        .template-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--accent);
+            font-size: 0.85rem;
+            text-decoration: none;
+            font-weight: 500;
+            margin-top: 8px;
+            transition: all 0.2s;
+        }
+
+        .template-link:hover {
+            color: #93c5fd;
+            text-decoration: underline;
+        }
+
+        /* Test results */
+        .result-summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            margin: 24px 0;
+        }
+
+        .result-card {
+            background: #121b33;
+            border: 1px solid #24325a;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .result-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--accent);
+        }
+
+        .result-card .rc-value {
+            font-size: 2rem;
+            font-weight: 700;
+            display: block;
+            line-height: 1;
+        }
+
+        .result-card .rc-label {
+            font-size: 0.78rem;
+            color: var(--muted);
+            margin-top: 6px;
+            display: block;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .result-card.total .rc-value {
+            color: #a78bfa;
+        }
+
+        .result-card.passed .rc-value {
+            color: #34d399;
+        }
+
+        .result-card.failed .rc-value {
+            color: #f87171;
+        }
+
+        .result-card.skipped .rc-value {
+            color: #fbbf24;
+        }
+
+        /* Step list */
+        .step-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .step-card {
+            background: #0f1930;
+            border: 1px solid #24325a;
+            border-left: 4px solid #3b82f6;
+            border-radius: 8px;
+            padding: 14px 18px;
+            transition: all 0.2s;
+            animation: issueSlideIn 0.3s ease-out forwards;
+            opacity: 0;
+        }
+
+        .step-card:hover {
+            border-color: #3b82f6;
+            background: #121b33;
+        }
+
+        .step-card.passed {
+            border-left-color: #34d399;
+        }
+
+        .step-card.failed {
+            border-left-color: #ef4444;
+        }
+
+        .step-card.skipped {
+            border-left-color: #fbbf24;
+        }
+
+        @keyframes issueSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .step-header .step-num {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--muted);
+            background: #1e293b;
+            padding: 2px 10px;
+            border-radius: 10px;
+        }
+
+        .step-header .step-status {
+            font-size: 0.76rem;
+            font-weight: 600;
+            padding: 3px 12px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .step-status.passed {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+        }
+
+        .step-status.failed {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+        }
+
+        .step-status.skipped {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+        }
+
+        .step-instruction {
+            font-weight: 600;
+            font-size: 0.92rem;
+            color: var(--fg);
+            margin-bottom: 4px;
+        }
+
+        .step-meta {
+            display: flex;
+            gap: 16px;
+            margin-top: 6px;
+            flex-wrap: wrap;
+        }
+
+        .step-meta-item {
+            font-size: 0.78rem;
+            color: #6b7280;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .step-meta-item code {
+            background: #1e293b;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.74rem;
+            color: #a78bfa;
+        }
+
+        .step-error {
+            margin-top: 6px;
+            font-size: 0.82rem;
+            color: #fca5a5;
+            background: rgba(239, 68, 68, 0.08);
+            padding: 6px 10px;
+            border-radius: 6px;
+            border-left: 3px solid #ef4444;
+        }
+
+        /* Component chips */
+        .component-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 12px 0;
+        }
+
+        .component-chip {
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 0.82rem;
+            color: var(--muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .component-chip:hover {
+            border-color: #6366f1;
+            background: #2d1f5e;
+            color: #e9eefc;
+        }
+
+        .component-chip .chip-count {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1px 7px;
+            border-radius: 10px;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+
+        /* Pass rate circle */
+        .pass-rate-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            position: relative;
+            background: conic-gradient(var(--rate-color) calc(var(--rate-pct) * 1%), #1e293b calc(var(--rate-pct) * 1%));
+            animation: scoreReveal 1.2s ease-out forwards;
+        }
+
+        .pass-rate-circle::before {
+            content: '';
+            position: absolute;
+            width: 95px;
+            height: 95px;
+            border-radius: 50%;
+            background: var(--bg);
+        }
+
+        .pass-rate-value {
+            position: relative;
+            z-index: 1;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--fg);
+            line-height: 1;
+        }
+
+        .pass-rate-label {
+            position: relative;
+            z-index: 1;
+            font-size: 0.7rem;
+            color: var(--muted);
+            margin-top: 2px;
+            font-weight: 500;
+        }
+
+        @keyframes scoreReveal {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .result-summary {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* Ollama setup hint */
+        .setup-hint {
+            background: rgba(59, 130, 246, 0.06);
+            border: 1px solid rgba(59, 130, 246, 0.15);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-top: 12px;
+        }
+
+        .setup-hint h4 {
+            margin: 0 0 8px 0;
+            color: var(--fg);
+            font-size: 0.9rem;
+        }
+
+        .setup-hint code {
+            background: #1e293b;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.82rem;
+            color: #a78bfa;
+        }
+
+        .setup-hint p {
+            color: var(--muted);
+            font-size: 0.84rem;
+            margin: 4px 0;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="header-brand">
+            <div class="header-brand-text">
+                <span class="header-brand-name">QA Testing Framework</span>
+                <span class="header-brand-tagline">Intelligent Visual Regression Platform</span>
+            </div>
+        </div>
+        <nav>
+            <a href="/">Visual Testing</a>
+            <a href="/broken-links">Broken Links</a>
+            <a href="/accessibility">Accessibility</a>
+            <a href="/seo-performance">SEO & Performance</a>
+            <a href="/semantic">HTML Semantic</a>
+            <a href="/functional" class="active">AI Functional</a>
+            <span class="nav-divider"></span>
+            <button id="nav-jira" class="btn-secondary"
+                style="font-size: 13px; padding: 5px 10px; cursor: pointer; border: 1px solid #374151; background: #1f2937; color: #94a3b8; border-radius: 6px;">Jira</button>
+        </nav>
+    </header>
+
+    <main class="container">
+        <!-- Run Test View -->
+        <div id="view-run">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <div>
+                    <h1 style="margin: 0;">🤖 AI Functional Testing</h1>
+                    <p style="color: var(--muted); margin-top: 5px; margin-bottom: 0;">
+                        Plain-English test cases. Zero locators. Powered by local Ollama LLM.
+                    </p>
+                </div>
+                <div style="display: flex; gap: 16px; align-items: center;">
+                    <span id="ollama-status" class="ai-badge disconnected">
+                        <span class="dot"></span>
+                        <span id="ollama-status-text">Checking Ollama...</span>
+                    </span>
+                    <button id="btn-clear" class="btn-reject"
+                        style="text-decoration: none; font-size: 14px; padding: 6px 12px;">Clear</button>
+                    <a href="#" id="nav-history"
+                        style="color: var(--accent); text-decoration: none; font-weight: 500;">History &rarr;</a>
+                </div>
+            </div>
+
+            <form id="functionalForm">
+                <!-- Input Type Toggle -->
+                <div class="toggle-switch" style="gap: 5px; margin-bottom: 12px;">
+                    <label>
+                        <input type="radio" name="inputType" value="url" checked onchange="toggleInputType()">
+                        Single URL
+                    </label>
+                    <label>
+                        <input type="radio" name="inputType" value="sitemap" onchange="toggleInputType()">
+                        Sitemap (All Pages)
+                    </label>
+                </div>
+
+                <!-- URL Input -->
+                <div id="urlInputContainer">
+                    <label>Target URL
+                        <input type="url" id="targetUrl" name="target_url"
+                            placeholder="https://example.com/page-to-test" />
+                    </label>
+                </div>
+
+                <!-- Sitemap Input -->
+                <div id="sitemapInputContainer" class="hidden">
+                    <label>Sitemap URL
+                        <input type="url" id="sitemapUrl" name="sitemap_url"
+                            placeholder="https://example.com/sitemap.xml" />
+                    </label>
+                </div>
+
+                <!-- Excel Upload -->
+                <div style="margin-top: 8px;">
+                    <label style="margin-bottom: 8px;">Test Cases (Excel File)</label>
+                    <div class="upload-zone" id="excel-drop-zone">
+                        <input type="file" id="excelFile" name="excel_file" accept=".xlsx,.xls,.csv"
+                            style="display: none;" />
+                        <div class="upload-icon">📊</div>
+                        <div class="upload-text">
+                            <strong>Click or drag</strong> your Excel file here<br />
+                            <span style="font-size: 0.82rem; color: #475569;">.xlsx, .xls, or .csv</span>
+                        </div>
+                        <div class="file-info" id="file-info">
+                            ✅ <span id="file-name"></span>
+                        </div>
+                    </div>
+                    <a href="/api/functional/template" class="template-link" download>
+                        📥 Download Excel Template
+                    </a>
+                </div>
+
+                <!-- AI Model Selection -->
+                <details
+                    style="margin-top: 12px; border: 1px solid #24325a; padding: 12px; border-radius: 8px; background: #0f1930;">
+                    <summary style="cursor: pointer; font-weight: 600; color: var(--muted);">AI Configuration ⚙️
+                    </summary>
+                    <div style="margin-top: 12px;">
+                        <div class="row">
+                            <label>Ollama Server URL
+                                <input type="text" id="ollamaUrl" name="ollama_url" placeholder="http://localhost:11434"
+                                    value="http://localhost:11434" />
+                            </label>
+                            <label>AI Model
+                                <select id="ollamaModel" name="ollama_model">
+                                    <option value="llama3">Llama 3 (Recommended)</option>
+                                    <option value="mistral">Mistral 7B</option>
+                                    <option value="gemma2">Gemma 2</option>
+                                    <option value="phi3">Phi 3</option>
+                                    <option value="llama3.1">Llama 3.1</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div id="ollama-models-list" style="margin-top: 10px; display: none;">
+                            <span style="font-size: 0.82rem; color: var(--muted);">Installed models: </span>
+                            <span id="installed-models" style="font-size: 0.82rem; color: #34d399;"></span>
+                        </div>
+                    </div>
+                </details>
+
+                <button type="submit">🚀 Run Functional Tests</button>
+            </form>
+
+
+            <!-- Loader -->
+            <div id="loader" class="loader-container hidden">
+                <div class="progress-bar-bg">
+                    <div id="progressFill" class="progress-bar-fill"></div>
+                </div>
+                <div id="statusText" class="status-text">0% - Starting...</div>
+            </div>
+
+            <!-- Results -->
+            <div id="results" class="hidden" style="margin-top: 24px;"></div>
+        </div>
+
+        <!-- History View -->
+        <div id="view-history" class="hidden">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h1 style="margin: 0;">Functional Test History</h1>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <button id="btn-delete-selected" class="btn-reject"
+                        style="font-size: 13px; padding: 5px 12px;">Delete Selected</button>
+                    <a href="#" id="nav-run"
+                        style="color: var(--accent); text-decoration: none; font-weight: 500;">&larr; Back</a>
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th width="40"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"></th>
+                        <th>Date</th>
+                        <th>URL</th>
+                        <th>Total</th>
+                        <th>Passed</th>
+                        <th>Failed</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="history-list"></tbody>
+            </table>
+            <div id="pagination"
+                style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;"></div>
+        </div>
+
+        <div id="toast" class="toast hidden"></div>
+
+        <!-- Jira Modals -->
+        <div id="jira-config-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Jira Configuration</h3>
+                <label>Server URL <input type="text" id="jira-server"
+                        placeholder="https://your-domain.atlassian.net"></label>
+                <label>Email <input type="email" id="jira-email" placeholder="email@example.com"></label>
+                <label>API Token <input type="password" id="jira-token" placeholder="API Token"></label>
+                <label>Project Key <input type="text" id="jira-project" placeholder="PROJ"></label>
+                <div class="modal-actions">
+                    <button id="btnSaveJira">Save & Test</button>
+                    <button onclick="document.getElementById('jira-config-modal').classList.add('hidden')"
+                        class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="jira-report-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Report to Jira</h3>
+                <label>Summary <input type="text" id="jira-summary"></label>
+                <label>Description <textarea id="jira-desc" rows="5"></textarea></label>
+                <div class="modal-actions">
+                    <button id="btnSendJira">Create Issue</button>
+                    <button onclick="document.getElementById('jira-report-modal').classList.add('hidden')"
+                        class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="patent-footer">
+        <div class="patent-footer-left">
+            <span>© 2026 QA Testing Framework — All Rights Reserved</span>
+        </div>
+        <div class="patent-footer-right">
+            Intelligent Web QA System v2.0 | AI-Driven Functional Regression Testing
+        </div>
+    </footer>
+
+    <script src="/static/functional.js"></script>
+    <script src="/static/jira_integration.js"></script>
+</body>
+
+</html>

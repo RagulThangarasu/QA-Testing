@@ -72,12 +72,14 @@ def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_
         'performance': 'Performance Only'
     }.get(test_type, test_type)
     
+    device_label = "Desktop & Mobile" if device_type == 'both' else device_type.capitalize()
+    
     summary_data = [
         ['Report ID:', job_id],
         ['Test Date:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
         ['Page URL:', page_url],
         ['Test Type:', test_type_label],
-        ['Device:', device_type.capitalize()]
+        ['Device:', device_label]
     ]
     
     summary_table = Table(summary_data, colWidths=[2*inch, 4*inch])
@@ -102,90 +104,117 @@ def generate_seo_performance_pdf(metrics, page_url, test_type, device_type, job_
     elements.append(visual_heading)
 
     # Prepare Data
-    # Scores
-    s_seo = metrics.get('seo_score', 0) or 0
-    s_perf = metrics.get('performance_score', 0) or 0
-    s_acc = metrics.get('accessibility_score', 0) or 0
-    s_best = metrics.get('best_practices_score', 0) or 0
+    if device_type == 'both' and isinstance(metrics, dict) and 'desktop' in metrics:
+        # Multi-device data
+        m_d = metrics['desktop']
+        m_m = metrics['mobile']
+        
+        # Scores
+        s_seo_d = m_d.get('seo_score', 0) or 0
+        s_perf_d = m_d.get('performance_score', 0) or 0
+        s_seo_m = m_m.get('seo_score', 0) or 0
+        s_perf_m = m_m.get('performance_score', 0) or 0
+        
+        # We'll use these for the charts
+        chart_data_d = [s_seo_d, s_perf_d]
+        chart_data_m = [s_seo_m, s_perf_m]
+        chart_labels = ['SEO', 'Performance']
+        
+        # Draw Bar Chart (Scores Comparison)
+        d_bar = Drawing(400, 200)
+        bc = VerticalBarChart()
+        bc.x = 50
+        bc.y = 50
+        bc.height = 125
+        bc.width = 300
+        bc.data = [chart_data_d, chart_data_m]
+        bc.valueAxis.valueMin = 0
+        bc.valueAxis.valueMax = 100
+        bc.categoryAxis.categoryNames = chart_labels
+        bc.bars[0].fillColor = colors.HexColor("#2563eb") # Desktop Blue
+        bc.bars[1].fillColor = colors.HexColor("#f59e0b") # Mobile Orange
+        
+        # Legend for Desktop/Mobile
+        legend = Legend()
+        legend.alignment = 'right'
+        legend.x = 350
+        legend.y = 150
+        legend.colorNamePairs = [(colors.HexColor("#2563eb"), 'Desktop'), (colors.HexColor("#f59e0b"), 'Mobile')]
+        d_bar.add(legend)
+        
+        d_bar.add(bc)
+        elements.append(Paragraph("Score Comparison (Desktop vs Mobile)", styles['Heading3']))
+        elements.append(d_bar)
+        
+        # Set primary for the rest of the report or we'll need loops
+        # Usually Mobile is what they care about for discrepancy
+        primary_metrics = m_m 
+        pass_metrics = m_m
+    else:
+        # Single device data (Original Logic)
+        s_seo = metrics.get('seo_score', 0) or 0
+        s_perf = metrics.get('performance_score', 0) or 0
+        s_acc = metrics.get('accessibility_score', 0) or 0
+        s_best = metrics.get('best_practices_score', 0) or 0
+        
+        chart_data = []
+        chart_labels = []
+        if test_type in ['seo', 'both'] or s_seo > 0:
+            chart_data.append(s_seo); chart_labels.append('SEO')
+        if test_type in ['performance', 'both'] or s_perf > 0:
+            chart_data.append(s_perf); chart_labels.append('Performance')
+        if test_type == 'both' or s_acc > 0:
+            chart_data.append(s_acc); chart_labels.append('Accessibility')
+        if test_type == 'both' or s_best > 0:
+            chart_data.append(s_best); chart_labels.append('Best Pract.')
+            
+        d_bar = Drawing(400, 200)
+        bc = VerticalBarChart()
+        bc.x = 50; bc.y = 50; bc.height = 125; bc.width = 300
+        bc.data = [chart_data]
+        bc.valueAxis.valueMin = 0; bc.valueAxis.valueMax = 100
+        bc.categoryAxis.categoryNames = chart_labels
+        bc.bars[0].fillColor = colors.HexColor("#2563eb")
+        d_bar.add(bc)
+        
+        elements.append(Paragraph("Category Scores", styles['Heading3']))
+        elements.append(d_bar)
+        primary_metrics = metrics
+        pass_metrics = metrics
+
+    elements.append(Spacer(1, 15))
     
-    # Counts
+    # Counts (Pass/Fail)
     pass_count = 0
     fail_count = 0
     
-    # Check SEO Details
-    if metrics.get('seo_details'):
-        for i in metrics['seo_details']:
+    if pass_metrics.get('seo_details'):
+        for i in pass_metrics['seo_details']:
             if i.get('passed'): pass_count += 1
             else: fail_count += 1
             
-    # Check Perf Details (using 0.9 threshold for 'pass')
-    if metrics.get('performance_details'):
-        for i in metrics['performance_details']:
+    if pass_metrics.get('performance_details'):
+        for i in pass_metrics['performance_details']:
             score = i.get('score', 0)
             if score >= 0.9: pass_count += 1
             else: fail_count += 1
             
-    # Prepare Chart Categories dynamically
-    chart_data = []
-    chart_labels = []
-    
-    if test_type in ['seo', 'both'] or s_seo > 0:
-        chart_data.append(s_seo)
-        chart_labels.append('SEO')
-    if test_type in ['performance', 'both'] or s_perf > 0:
-        chart_data.append(s_perf)
-        chart_labels.append('Performance')
-    if test_type == 'both' or s_acc > 0:
-        chart_data.append(s_acc)
-        chart_labels.append('Accessibility')
-    if test_type == 'both' or s_best > 0:
-        chart_data.append(s_best)
-        chart_labels.append('Best Pract.')
-        
-    # Draw Bar Chart (Scores)
-    d_bar = Drawing(400, 200)
-    bc = VerticalBarChart()
-    bc.x = 50
-    bc.y = 50
-    bc.height = 125
-    bc.width = 300
-    bc.data = [chart_data]
-    bc.valueAxis.valueMin = 0
-    bc.valueAxis.valueMax = 100
-    bc.valueAxis.valueStep = 20
-    bc.categoryAxis.labels.boxAnchor = 'ne'
-    bc.categoryAxis.categoryNames = chart_labels
-    bc.bars[0].fillColor = colors.HexColor("#2563eb")
-    
-    d_bar.add(bc)
-    
-    # Add title to bar chart via Paragraph
-    elements.append(Paragraph("Category Scores", styles['Heading3']))
-    elements.append(d_bar)
-    elements.append(Spacer(1, 15))
-    
     # Draw Pie Chart (Pass/Fail)
     if pass_count + fail_count > 0:
         d_pie = Drawing(400, 150)
         pc = Pie()
-        pc.x = 100
-        pc.y = 25
-        pc.width = 100
-        pc.height = 100
+        pc.x = 100; pc.y = 25; pc.width = 100; pc.height = 100
         pc.data = [pass_count, fail_count]
         pc.labels = [f"Passed ({pass_count})", f"Issues ({fail_count})"]
         pc.slices.strokeWidth = 0.5
-        pc.slices[0].fillColor = colors.HexColor("#10b981") # Green
-        pc.slices[1].fillColor = colors.HexColor("#ef4444") # Red
-        
+        pc.slices[0].fillColor = colors.HexColor("#10b981")
+        pc.slices[1].fillColor = colors.HexColor("#ef4444")
         d_pie.add(pc)
         
-        legend = Legend()
-        legend.alignment = 'right'
-        legend.x = 300
-        legend.y = 80
-        legend.colorNamePairs = [(colors.HexColor("#10b981"), 'Passed'), (colors.HexColor("#ef4444"), 'Issues')]
-        d_pie.add(legend)
+        legend_pf = Legend()
+        legend_pf.alignment = 'right'; legend_pf.x = 300; legend_pf.y = 80
+        legend_pf.colorNamePairs = [(colors.HexColor("#10b981"), 'Passed'), (colors.HexColor("#ef4444"), 'Issues')]
+        d_pie.add(legend_pf)
         
         elements.append(Paragraph("Audit Status Breakdown", styles['Heading3']))
         elements.append(d_pie)
@@ -428,23 +457,38 @@ def generate_batch_seo_pdf(results, job_id, output_dir, test_type='both'):
     elements.append(Paragraph("Detailed URL Analysis", styles['Heading2']))
     
     # Table Header
-    det_data = [['URL', 'SEO', 'Perf', 'LCP', 'CLS', 'TTFB']]
+    has_dual = any('Perf (Desktop)' in r for r in results)
+    
+    if has_dual:
+        det_data = [['URL', 'SEO', 'Perf (D)', 'Perf (M)', 'LCP (M)', 'CLS']]
+    else:
+        det_data = [['URL', 'SEO', 'Perf', 'LCP', 'CLS', 'TTFB']]
     
     for r in results:
         # Truncate URL for display
         url_text = r.get('URL', '')
         disp_url = Paragraph(url_text, styles['Normal'])
         
-        det_data.append([
-            disp_url,
-            r.get('SEO Score', '-'),
-            r.get('Performance Score', '-'),
-            r.get('Largest Contentful Paint', '-'),
-            r.get('Cumulative Layout Shift', '-'),
-            r.get('Time to First Byte', '-')
-        ])
+        if has_dual:
+             det_data.append([
+                disp_url,
+                r.get('SEO Score', '-'),
+                r.get('Perf (Desktop)', '-'),
+                r.get('Perf (Mobile)', '-'),
+                r.get('LCP (Mobile)', '-'),
+                r.get('Cumulative Layout Shift', '-')
+            ])
+        else:
+            det_data.append([
+                disp_url,
+                r.get('SEO Score', '-'),
+                r.get('Performance Score', '-'),
+                r.get('Largest Contentful Paint', '-'),
+                r.get('Cumulative Layout Shift', '-'),
+                r.get('Time to First Byte', '-')
+            ])
         
-    t_det = Table(det_data, colWidths=[2.5*inch, 0.7*inch, 0.7*inch, 0.8*inch, 0.8*inch, 0.8*inch], repeatRows=1)
+    t_det = Table(det_data, colWidths=[2.5*inch, 0.7*inch, 0.7*inch, 0.7*inch, 0.7*inch, 0.7*inch], repeatRows=1)
     t_det.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2563eb')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),

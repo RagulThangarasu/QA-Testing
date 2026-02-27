@@ -314,13 +314,30 @@ async function pollStatus(jobId) {
                 }
 
                 if (result.performance_score !== undefined && result.performance_score !== null) {
-                    const perfColor = getScoreColor(result.performance_score);
-                    resultHTML += `
-                        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 6px;">
-                            <p style="margin: 0; color: var(--muted); font-size: 14px;">Performance Score</p>
-                            <p style="margin: 5px 0 0 0; font-size: 32px; font-weight: bold; color: ${perfColor};">${result.performance_score}/100</p>
-                        </div>
-                    `;
+                    if (result.desktop_score !== undefined && result.mobile_score !== undefined) {
+                        // Show both
+                        const dColor = getScoreColor(result.desktop_score);
+                        const mColor = getScoreColor(result.mobile_score);
+                        resultHTML += `
+                            <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 6px;">
+                                <p style="margin: 0; color: var(--muted); font-size: 14px;">Performance (Desktop)</p>
+                                <p style="margin: 5px 0 0 0; font-size: 32px; font-weight: bold; color: ${dColor};">${result.desktop_score}/100</p>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 6px;">
+                                <p style="margin: 0; color: var(--muted); font-size: 14px;">Performance (Mobile)</p>
+                                <p style="margin: 5px 0 0 0; font-size: 32px; font-weight: bold; color: ${mColor};">${result.mobile_score}/100</p>
+                            </div>
+                        `;
+                    } else {
+                        // Show single
+                        const perfColor = getScoreColor(result.performance_score);
+                        resultHTML += `
+                            <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 6px;">
+                                <p style="margin: 0; color: var(--muted); font-size: 14px;">Performance Score</p>
+                                <p style="margin: 5px 0 0 0; font-size: 32px; font-weight: bold; color: ${perfColor};">${result.performance_score}/100</p>
+                            </div>
+                        `;
+                    }
                 }
 
                 if (result.load_time !== undefined && result.load_time !== null) {

@@ -1,5 +1,11 @@
-import os, uuid, threading, time, datetime
+import os, uuid, threading, time, datetime, signal
 from flask import Flask, request, send_file, jsonify
+
+# Handle "[Errno 32] Broken pipe" gracefully in Unix-like environments (Mac/Linux)
+try:
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+except Exception:
+    pass
 from werkzeug.utils import secure_filename
 from utils.screenshot import capture_screenshot
 from utils.image_compare import compare_images
@@ -173,7 +179,10 @@ def check_broken_links():
 
 def process_broken_links(job_id, stage_url, check_type, job_dir):
     try:
-        from utils.crawler import ImageIconCrawler, LinkCrawler, generate_excel_report
+        from utils.crawler import ImageIconCrawler, LinkCrawler, generate_excel_report, global_status_cache
+        
+        # Clear cache for fresh check
+        global_status_cache.clear()
         
         store.save_job(job_id, {"step": "Crawling pages...", "progress": 10})
         
@@ -182,13 +191,14 @@ def process_broken_links(job_id, stage_url, check_type, job_dir):
             # Run both image and link crawlers (default option)
             store.save_job(job_id, {"step": "Checking images & icons...", "progress": 20})
             img_crawler = ImageIconCrawler(stage_url)
-            broken_images = img_crawler.run()
+            broken_images, special_img = img_crawler.run()
             
             store.save_job(job_id, {"step": "Checking links...", "progress": 50})
             link_crawler = LinkCrawler(stage_url)
-            broken_links = link_crawler.run()
+            broken_links, special_links = link_crawler.run()
             
             broken_assets = broken_images + broken_links
+            special_interest = special_img + special_links
             
         elif check_type == "overlapping_breaking":
             # Run overlapping and breaking detection
@@ -197,6 +207,7 @@ def process_broken_links(job_id, stage_url, check_type, job_dir):
                 store.save_job(job_id, {"step": "Checking overlapping & breaking...", "progress": 30})
                 overlap_crawler = OverlappingBreakingCrawler(stage_url)
                 broken_assets = overlap_crawler.run()
+                special_interest = []
             except ImportError as e:
                 raise Exception("Selenium is required for overlapping & breaking detection. Please install: pip install selenium")
             except Exception as e:
@@ -206,12 +217,14 @@ def process_broken_links(job_id, stage_url, check_type, job_dir):
             # Run all crawlers including future features
             store.save_job(job_id, {"step": "Checking images & icons...", "progress": 15})
             img_crawler = ImageIconCrawler(stage_url)
-            broken_images = img_crawler.run()
+            broken_images, special_img = img_crawler.run()
             
             store.save_job(job_id, {"step": "Checking links...", "progress": 35})
             link_crawler = LinkCrawler(stage_url)
-            broken_links = link_crawler.run()
+            broken_links, special_links = link_crawler.run()
             
+            special_interest = special_img + special_links
+
             # Add overlapping and breaking detection
             try:
                 from utils.overlapping_crawler import OverlappingBreakingCrawler
@@ -228,17 +241,18 @@ def process_broken_links(job_id, stage_url, check_type, job_dir):
             # Default to broken_links
             store.save_job(job_id, {"step": "Checking images & icons...", "progress": 20})
             img_crawler = ImageIconCrawler(stage_url)
-            broken_images = img_crawler.run()
+            broken_images, special_img = img_crawler.run()
             
             store.save_job(job_id, {"step": "Checking links...", "progress": 50})
             link_crawler = LinkCrawler(stage_url)
-            broken_links = link_crawler.run()
+            broken_links, special_links = link_crawler.run()
             
             broken_assets = broken_images + broken_links
+            special_interest = special_img + special_links
         
         store.save_job(job_id, {"step": "Generating report...", "progress": 90})
         
-        report_path = generate_excel_report(broken_assets, job_id, job_dir)
+        report_path = generate_excel_report(broken_assets, special_interest, job_id, job_dir)
         
         final_result = {
             "broken_count": len(broken_assets),
@@ -581,9 +595,29 @@ def upload_baseline_api():
         return jsonify({"error": str(e)}), 500
 
 @app.get("/")
-
 def index():
     return app.send_static_file("index.html")
+
+# ── CI Config API ──────────────────────────────────────────────────────────
+
+CI_VISUAL_CONFIG_FILE = os.path.join(BASE_DIR, "ci_visual_config.json")
+
+@app.get("/api/ci/config")
+def get_ci_config():
+    if os.path.exists(CI_VISUAL_CONFIG_FILE):
+        with open(CI_VISUAL_CONFIG_FILE) as f:
+            return jsonify(json.load(f))
+    return jsonify({"error": "No config found"}), 404
+
+@app.post("/api/ci/config")
+def save_ci_config():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data"}), 400
+    with open(CI_VISUAL_CONFIG_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+    return jsonify({"success": True})
+
 
 @app.get("/broken-links")
 def broken_links_page():
@@ -1086,20 +1120,38 @@ def process_seo_performance_test(job_id, page_url, test_type, device_type, job_d
         store.save_job(job_id, {"step": f"Running PageSpeed analysis ({device_type})...", "progress": 30})
         
         # Run PageSpeed Insights analysis
-        strategy = 'mobile' if device_type == 'mobile' else 'desktop'
-        metrics = psi.analyze(page_url, strategy=strategy, categories=categories)
+        if device_type == 'both':
+            store.save_job(job_id, {"step": "Running Desktop analysis...", "progress": 30})
+            desktop_metrics = psi.analyze(page_url, strategy='desktop', categories=categories)
+            
+            store.save_job(job_id, {"step": "Running Mobile analysis...", "progress": 50})
+            mobile_metrics = psi.analyze(page_url, strategy='mobile', categories=categories)
+            
+            metrics = {
+                'desktop': desktop_metrics,
+                'mobile': mobile_metrics,
+                # For backward compatibility with simpler parts of the UI
+                'performance_score': mobile_metrics.get('performance_score'),
+                'seo_score': mobile_metrics.get('seo_score'),
+                'load_time': mobile_metrics.get('load_time'),
+                'performance_details': mobile_metrics.get('performance_details'),
+                'recommendations': mobile_metrics.get('recommendations')
+            }
+        else:
+            strategy = 'mobile' if device_type == 'mobile' else 'desktop'
+            metrics = psi.analyze(page_url, strategy=strategy, categories=categories)
         
         store.save_job(job_id, {"step": "Processing results...", "progress": 70})
         
         # In case the api returns null for not requested categories, explicitly setting them to None
-        if test_type == 'seo':
+        if test_type == 'seo' and device_type != 'both':
             metrics['performance_score'] = None
             metrics['accessibility_score'] = None
             metrics['best_practices_score'] = None
             metrics['load_time'] = None
             metrics['performance_details'] = []
             
-        if test_type == 'performance':
+        if test_type == 'performance' and device_type != 'both':
             metrics['seo_score'] = None
             metrics['accessibility_score'] = None
             metrics['best_practices_score'] = None
@@ -1119,6 +1171,10 @@ def process_seo_performance_test(job_id, page_url, test_type, device_type, job_d
             "recommendations": metrics.get('recommendations', []),
             "report_url": f"/download/{job_id}/{os.path.basename(report_path)}"
         }
+        
+        if device_type == 'both':
+            final_result['desktop_score'] = metrics['desktop'].get('performance_score')
+            final_result['mobile_score'] = metrics['mobile'].get('performance_score')
         
         store.save_job(job_id, {
             "result": final_result,
@@ -1177,7 +1233,10 @@ def process_seo_performance_batch(job_id, file_path, test_type, device_type, job
         else:
             categories = ['performance', 'seo', 'accessibility', 'best-practices']
             
-        strategy = 'mobile' if device_type == 'mobile' else 'desktop'
+        if device_type == 'both':
+            strategy = 'both'
+        else:
+            strategy = 'mobile' if device_type == 'mobile' else 'desktop'
         results = []
         
         for i, url in enumerate(urls):
@@ -1258,6 +1317,27 @@ def analyze_single_url_psi(url, psi, strategy, categories):
             else:
                 url = "https://" + url
             
+        if strategy == 'both':
+            metrics_d = psi.analyze(url, strategy='desktop', categories=categories)
+            metrics_m = psi.analyze(url, strategy='mobile', categories=categories)
+            
+            return {
+                "URL": url,
+                "Status": "Success",
+                "Perf (Desktop)": metrics_d.get('performance_score', 'N/A'),
+                "Perf (Mobile)": metrics_m.get('performance_score', 'N/A'),
+                "Performance Score": metrics_m.get('performance_score', 'N/A'), # Baseline for summary
+                "SEO Score": metrics_m.get('seo_score', 'N/A'),
+                "Accessibility Score": metrics_m.get('accessibility_score', 'N/A'),
+                "Best Practices Score": metrics_m.get('best_practices_score', 'N/A'),
+                "Load Time (s)": metrics_m.get('load_time', 'N/A'),
+                "LCP (Mobile)": next((d['displayValue'] for d in metrics_m.get('performance_details', []) if d.get('id') == 'largest-contentful-paint'), 'N/A'),
+                "LCP (Desktop)": next((d['displayValue'] for d in metrics_d.get('performance_details', []) if d.get('id') == 'largest-contentful-paint'), 'N/A'),
+                "Largest Contentful Paint": next((d['displayValue'] for d in metrics_m.get('performance_details', []) if d.get('id') == 'largest-contentful-paint'), 'N/A'),
+                "Cumulative Layout Shift": next((d['displayValue'] for d in metrics_m.get('performance_details', []) if d.get('id') == 'cumulative-layout-shift'), 'N/A'),
+                "Time to First Byte": next((d['displayValue'] for d in metrics_m.get('performance_details', []) if d.get('id') == 'server-response-time'), 'N/A'),
+            }
+        
         metrics = psi.analyze(url, strategy=strategy, categories=categories)
         
         return {
@@ -1325,7 +1405,10 @@ def process_seo_performance_batch(job_id, file_path, test_type, device_type, job
         if not categories:
             categories = ['performance', 'seo', 'accessibility', 'best-practices']
             
-        strategy = 'mobile' if device_type == 'mobile' else 'desktop'
+        if device_type == 'both':
+            strategy = 'both'
+        else:
+            strategy = 'mobile' if device_type == 'mobile' else 'desktop'
         results = []
         completed = 0
         
@@ -1408,7 +1491,10 @@ def process_seo_performance_sitemap(job_id, sitemap_url, test_type, device_type,
         else:
             categories = ['performance', 'seo', 'accessibility', 'best-practices']
             
-        strategy = 'mobile' if device_type == 'mobile' else 'desktop'
+        if device_type == 'both':
+            strategy = 'both'
+        else:
+            strategy = 'mobile' if device_type == 'mobile' else 'desktop'
         results = []
         completed = 0
         
@@ -1791,6 +1877,243 @@ def delete_semantic_history():
     return jsonify({"message": f"Deleted {len(job_ids)} job(s)"}), 200
 
 
+# ─── AI Functional Testing Routes ───
+
+@app.get("/functional")
+def functional_page():
+    return app.send_static_file("functional.html")
+
+
+@app.get("/api/functional/ollama-status")
+def check_ollama_status():
+    """Check if Ollama is running and list available models"""
+    import requests as req_lib
+    ollama_url = request.args.get("url", "http://localhost:11434")
+    try:
+        resp = req_lib.get(f"{ollama_url}/api/tags", timeout=3)
+        if resp.status_code == 200:
+            data = resp.json()
+            models = [m.get("name", "") for m in data.get("models", [])]
+            return jsonify({"available": True, "models": models})
+    except Exception:
+        pass
+    return jsonify({"available": False, "models": []})
+
+
+@app.get("/api/functional/template")
+def download_functional_template():
+    """Generate and return a sample Excel template for functional test cases"""
+    import pandas as pd
+    import io
+
+    sample_data = {
+        "Test_ID": ["TC_001", "TC_002", "TC_003", "TC_004", "TC_005"],
+        "Component": ["Navigation", "Search", "Search", "Cart", "Footer"],
+        "Action_Description": [
+            "Click the About link in the navigation menu",
+            "Type 'Nike Shoes' into the search box",
+            "Press the search button",
+            "Click the Add to Cart button on the first product",
+            "Verify the copyright text is visible in the footer"
+        ],
+        "Test_Data": ["", "Nike Shoes", "", "", ""],
+        "Expected_Result": [
+            "The About page should load",
+            "",
+            "Search results should appear",
+            "Item added confirmation should appear",
+            "Copyright text is visible"
+        ]
+    }
+
+    df = pd.DataFrame(sample_data)
+    output = io.BytesIO()
+    df.to_excel(output, index=False, sheet_name="Test Cases")
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="functional_test_template.xlsx"
+    )
+
+
+@app.post("/api/functional/run")
+def run_functional_tests():
+    """Start AI functional testing"""
+    input_type = request.form.get("input_type", "url")
+    target_url = request.form.get("target_url", "").strip()
+    sitemap_url = request.form.get("sitemap_url", "").strip()
+    ollama_url = request.form.get("ollama_url", "http://localhost:11434").strip()
+    ollama_model = request.form.get("ollama_model", "llama3").strip()
+
+    # Validate
+    if input_type == "url" and not target_url.startswith("http"):
+        return jsonify({"error": "Valid target URL (http/https) is required"}), 400
+    if input_type == "sitemap" and not sitemap_url.startswith("http"):
+        return jsonify({"error": "Valid sitemap URL (http/https) is required"}), 400
+
+    # Excel file
+    excel_file = request.files.get("excel_file")
+    if not excel_file or excel_file.filename == "":
+        return jsonify({"error": "Excel test cases file is required"}), 400
+
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = os.path.join(RUNS_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+
+    # Save Excel file
+    excel_path = os.path.join(job_dir, secure_filename(excel_file.filename))
+    excel_file.save(excel_path)
+
+    url_for_display = target_url if input_type == "url" else sitemap_url
+
+    job_data = {
+        "job_id": job_id,
+        "type": "functional_testing",
+        "input_type": input_type,
+        "target_url": target_url if input_type == "url" else None,
+        "sitemap_url": sitemap_url if input_type == "sitemap" else None,
+        "status": "running",
+        "progress": 0,
+        "step": "Starting AI functional tests...",
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "result": None
+    }
+    store.save_job(job_id, job_data)
+
+    thread = threading.Thread(
+        target=process_functional_tests,
+        args=(job_id, input_type, target_url, sitemap_url, excel_path, ollama_url, ollama_model, job_dir)
+    )
+    thread.start()
+
+    return jsonify({"job_id": job_id})
+
+
+def process_functional_tests(job_id, input_type, target_url, sitemap_url, excel_path, ollama_url, ollama_model, job_dir):
+    """Background thread for AI functional testing"""
+    import traceback
+
+    try:
+        from utils.functional_test_engine import FunctionalTestEngine, generate_functional_report_pdf
+
+        engine = FunctionalTestEngine(ollama_url=ollama_url, ollama_model=ollama_model)
+
+        # Progress callback
+        def progress_cb(step, pct):
+            store.save_job(job_id, {"step": step, "progress": pct})
+
+        # Check Ollama connectivity
+        store.save_job(job_id, {"step": "Checking Ollama connectivity...", "progress": 2})
+        if not engine.ollama.is_available():
+            store.save_job(job_id, {
+                "status": "failed",
+                "error": "Ollama is not running. Please start Ollama with 'ollama serve' and try again.",
+                "progress": 100,
+                "step": "Failed"
+            })
+            return
+
+        # Parse Excel test cases
+        store.save_job(job_id, {"step": "Parsing Excel test cases...", "progress": 5})
+        test_cases = engine.parse_excel_test_cases(excel_path)
+
+        if not test_cases:
+            store.save_job(job_id, {
+                "status": "failed",
+                "error": "No test cases found in the Excel file. Please check the format.",
+                "progress": 100,
+                "step": "Failed"
+            })
+            return
+
+        store.save_job(job_id, {"step": f"Found {len(test_cases)} test cases. Starting execution...", "progress": 8})
+
+        # Run tests
+        if input_type == "url":
+            results = engine.run_single_url_tests(
+                target_url, test_cases, job_id, job_dir, progress_callback=progress_cb
+            )
+        else:
+            results = engine.run_sitemap_tests(
+                sitemap_url, test_cases, job_id, job_dir, progress_callback=progress_cb
+            )
+
+        # Generate PDF report
+        store.save_job(job_id, {"step": "Generating PDF report...", "progress": 92})
+        try:
+            pdf_path = generate_functional_report_pdf(results, job_id, job_dir)
+            results["pdf_report_url"] = f"/download/{job_id}/{os.path.basename(pdf_path)}"
+        except Exception as pdf_err:
+            results["pdf_error"] = str(pdf_err)
+
+        store.save_job(job_id, {
+            "result": results,
+            "status": "completed",
+            "progress": 100,
+            "step": "Done"
+        })
+
+    except Exception as e:
+        error_details = f"{str(e)}\n{traceback.format_exc()}"
+        store.save_job(job_id, {
+            "status": "failed",
+            "error": error_details,
+            "progress": 100,
+            "step": "Failed"
+        })
+
+
+@app.get("/api/functional/history")
+def get_functional_history():
+    jobs = store.list_jobs()
+    functional_jobs = [j for j in jobs if j.get("type") == "functional_testing"]
+
+    try:
+        page = int(request.args.get("page", 1))
+        limit = int(request.args.get("limit", 10))
+    except ValueError:
+        page = 1
+        limit = 10
+
+    if page < 1:
+        page = 1
+    if limit < 1:
+        limit = 10
+
+    start = (page - 1) * limit
+    end = start + limit
+
+    paginated_jobs = functional_jobs[start:end]
+
+    return jsonify({
+        "jobs": paginated_jobs,
+        "total": len(functional_jobs),
+        "page": page,
+        "limit": limit
+    })
+
+
+@app.delete("/api/functional/history")
+def delete_functional_history():
+    data = request.get_json()
+    job_ids = data.get("job_ids", [])
+
+    if not job_ids:
+        return jsonify({"error": "No job IDs provided"}), 400
+
+    for jid in job_ids:
+        store.delete_job(jid)
+        jdir = os.path.join(RUNS_DIR, jid)
+        if os.path.exists(jdir):
+            import shutil
+            shutil.rmtree(jdir)
+
+    return jsonify({"message": f"Deleted {len(job_ids)} job(s)"}), 200
+
+
 # Jira Integration Routes
 
 @app.post("/api/jira/config")
@@ -1853,69 +2176,6 @@ def create_issue():
         return jsonify({"error": str(e)}), 500
 
 
-# GitHub Integration Routes
-
-@app.post("/api/github/config")
-def save_github_config():
-    data = request.json
-    token = data.get("token")
-    owner = data.get("owner")
-    repo = data.get("repo")
-
-    if not all([token, owner, repo]):
-        return jsonify({"error": "All fields are required"}), 400
-
-    try:
-        # Test connection
-        from utils.github_client import GitHubClient
-        client = GitHubClient(token, owner, repo)
-        client.verify_connection()
-        GitHubClient.save_config(token, owner, repo)
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-@app.get("/api/github/config")
-def get_github_config():
-    from utils.github_client import GitHubClient
-    config = GitHubClient.load_config()
-    # Mask token
-    if config.get("token"):
-        config["token"] = "********"
-    return jsonify(config)
-
-@app.post("/api/github/issue")
-def create_github_issue():
-    data = request.json
-    title = data.get("title")
-    body = data.get("body")
-    job_id = data.get("job_id")
-    issue_filename = data.get("issue_filename")  # Context only
-    
-    from utils.github_client import GitHubClient
-    config = GitHubClient.load_config()
-    if not config:
-        return jsonify({"error": "GitHub configuration not found. Please configure GitHub first."}), 400
-
-    try:
-        client = GitHubClient(config["token"], config["owner"], config["repo"])
-        
-        # Append some context if available
-        if job_id:
-            body += f"\n\n**Visual Testing Context**\nJob ID: {job_id}"
-        if issue_filename:
-             body += f"\nFile: {issue_filename}"
-
-        gh_issue = client.create_issue(
-            title=title,
-            body=body,
-            labels=["visual-regression"]
-        )
-        return jsonify({"success": True, "number": gh_issue["number"], "url": gh_issue["html_url"]})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 
 @app.post("/api/history/delete")
 def delete_history():
@@ -1947,7 +2207,18 @@ def process_git_push(job_id, commit_message, branch):
     """Background thread for git push operations - Optimized for speed"""
     import subprocess
     
-    project_dir = BASE_DIR
+    # Dynamically find the git root directory to ensure all changes (including root files) are pushed
+    try:
+        root_result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        project_dir = root_result.stdout.strip()
+    except Exception:
+        project_dir = BASE_DIR # Fallback
     
     # Prevent git from opening any editor or interactive prompt
     git_env = os.environ.copy()
@@ -2060,13 +2331,14 @@ def process_git_push(job_id, commit_message, branch):
             "step": f"Pushing to {branch}..."
         })
         
-        # Push to remote
+        # Push to remote with a longer timeout and --progress for better visibility in logs if needed
+        # Note: git push -u might be helpful too but we assume branch exists or is tracked
         push_result = subprocess.run(
             ["git", "push", "origin", branch],
             cwd=project_dir,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=300, # Increased to 5 minutes for slower connections
             env=git_env
         )
         
@@ -2230,6 +2502,481 @@ def git_status():
         }), 500
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  GITHUB INTEGRATION — Config, Webhooks, PR Dashboard, PR Auto-Test
+# ═══════════════════════════════════════════════════════════════════════════
+
+GITHUB_CONFIG_FILE = os.path.join(BASE_DIR, "github_config.json")
+CI_RESULTS_DIR = os.path.join(BASE_DIR, "ci_visual_results")
+os.makedirs(CI_RESULTS_DIR, exist_ok=True)
+
+# In-memory store for PR test run tracking
+pr_runs = {}   # pr_number -> { sha, job_ids, status, created_at }
+
+
+def _load_gh_config() -> dict:
+    if os.path.exists(GITHUB_CONFIG_FILE):
+        with open(GITHUB_CONFIG_FILE) as f:
+            return json.load(f)
+    return {}
+
+
+def _save_gh_config(data: dict):
+    existing = _load_gh_config()
+    existing.update(data)
+    with open(GITHUB_CONFIG_FILE, "w") as f:
+        json.dump(existing, f, indent=2)
+
+
+# ─── Config ─────────────────────────────────────────────────────────────────
+
+@app.get("/api/github/config")
+def get_github_config():
+    cfg = _load_gh_config()
+    # Mask token in response
+    safe = {k: v for k, v in cfg.items() if k != "token"}
+    safe["token"] = "***" if cfg.get("token") else ""
+    return jsonify(safe)
+
+
+@app.post("/api/github/config")
+def save_github_config():
+    data = request.get_json()
+    token = data.get("token", "").strip()
+    owner = data.get("owner", "").strip()
+    repo  = data.get("repo", "").strip()
+    webhook_secret = data.get("webhook_secret", "").strip()
+
+    if not token or not owner or not repo:
+        return jsonify({"success": False, "error": "token, owner, and repo are required"}), 400
+
+    # Test connection
+    try:
+        import requests as req
+        r = req.get("https://api.github.com/user",
+                    headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
+                    timeout=10)
+        if r.status_code != 200:
+            return jsonify({"success": False, "error": f"GitHub auth failed: HTTP {r.status_code}"}), 400
+        login = r.json().get("login", "?")
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Connection error: {e}"}), 500
+
+    _save_gh_config({"token": token, "owner": owner, "repo": repo,
+                     "webhook_secret": webhook_secret, "login": login})
+    return jsonify({"success": True, "login": login})
+
+
+# ─── Issues ─────────────────────────────────────────────────────────────────
+
+@app.post("/api/github/issue")
+def create_github_issue():
+    from utils.github_client import create_issue
+    data = request.get_json()
+    title   = data.get("title", "").strip()
+    body    = data.get("body", "").strip()
+    job_id  = data.get("job_id", "")
+    fname   = data.get("issue_filename", "")
+    labels  = data.get("labels", ["visual-regression", "bug"])
+
+    if not title:
+        return jsonify({"success": False, "error": "title is required"}), 400
+
+    # Enrich body with job context
+    if job_id:
+        body += f"\n\n---\n**QA Job ID:** `{job_id}`"
+        if fname:
+            body += f"\n**File:** `{fname}`"
+        body += f"\n**Diff Overlay:** /download/{job_id}/diff_overlay.png"
+
+    result = create_issue(title=title, body=body, labels=labels)
+    if result.get("success"):
+        return jsonify(result)
+    return jsonify(result), 500
+
+
+# ─── PR List & Info ──────────────────────────────────────────────────────────
+
+@app.get("/api/github/prs")
+def list_prs():
+    from utils.github_client import list_open_prs
+    return jsonify(list_open_prs())
+
+
+@app.get("/api/github/pr/<int:pr_number>")
+def get_pr(pr_number):
+    from utils.github_client import get_pr_info
+    return jsonify(get_pr_info(pr_number))
+
+
+# ─── Webhook Receiver ────────────────────────────────────────────────────────
+
+@app.post("/api/github/webhook")
+def github_webhook():
+    """
+    Receives GitHub webhook events.
+    On pull_request (opened/synchronize/reopened) → trigger visual tests.
+    On push to main/staging → optionally refresh baselines.
+    """
+    from utils.github_client import verify_webhook_signature, post_commit_status
+
+    cfg = _load_gh_config()
+    secret = cfg.get("webhook_secret", "")
+
+    # Verify signature
+    sig_header = request.headers.get("X-Hub-Signature-256", "")
+    payload_bytes = request.get_data()
+    if secret and not verify_webhook_signature(payload_bytes, sig_header, secret):
+        return jsonify({"error": "Invalid webhook signature"}), 401
+
+    event = request.headers.get("X-GitHub-Event", "")
+    data  = request.get_json(force=True) or {}
+
+    if event == "ping":
+        return jsonify({"message": "pong", "success": True})
+
+    if event == "pull_request":
+        action = data.get("action", "")
+        pr     = data.get("pull_request", {})
+        pr_num = pr.get("number")
+        sha    = pr.get("head", {}).get("sha", "")
+        branch = pr.get("head", {}).get("ref", "")
+        base   = pr.get("base", {}).get("ref", "")
+        title  = pr.get("title", "")
+        draft  = pr.get("draft", False)
+
+        # Only trigger on meaningful actions, skip draft PRs
+        if action not in ("opened", "synchronize", "reopened", "ready_for_review"):
+            return jsonify({"message": f"Ignored action: {action}"})
+        if draft:
+            return jsonify({"message": "Skipping draft PR"})
+
+        # Post pending status immediately
+        if sha:
+            post_commit_status(sha=sha, state="pending",
+                               description="Visual regression tests queued",
+                               context="visual-regression/qa-framework")
+
+        # Determine staging URL strategy:
+        # 1. PR label: staging-url:https://...
+        # 2. Config staging_base_url + /pr-{pr_num}
+        # 3. Config staging_url directly
+        staging_url = ""
+        for label in pr.get("labels", []):
+            lname = label.get("name", "")
+            if lname.startswith("staging-url:"):
+                staging_url = lname.replace("staging-url:", "").strip()
+                break
+
+        if not staging_url:
+            staging_url = (cfg.get("staging_base_url", "").rstrip("/") + f"/pr-{pr_num}"
+                           if cfg.get("staging_base_url") else cfg.get("staging_url", ""))
+
+        # Store PR tracking info
+        pr_runs[str(pr_num)] = {
+            "pr_number": pr_num,
+            "sha": sha,
+            "branch": branch,
+            "base": base,
+            "title": title,
+            "staging_url": staging_url,
+            "status": "queued",
+            "created_at": datetime.datetime.utcnow().isoformat(),
+            "job_ids": [],
+        }
+
+        if staging_url:
+            # Trigger async visual test run
+            thread = threading.Thread(
+                target=process_pr_visual_test,
+                args=(pr_num, sha, staging_url, branch, title),
+                daemon=True
+            )
+            thread.start()
+            return jsonify({"message": "Visual test queued", "pr": pr_num, "staging_url": staging_url})
+        else:
+            return jsonify({"message": "No staging URL — test skipped (add staging-url label or configure staging_url)"})
+
+    if event == "push":
+        ref = data.get("ref", "")
+        sha = data.get("after", "")
+        if ref in ("refs/heads/main", "refs/heads/staging") and sha:
+            # Future: trigger baseline promotion on passing push
+            pass
+        return jsonify({"message": "Push event received"})
+
+    return jsonify({"message": f"Event '{event}' not handled"})
+
+
+# ─── PR Visual Test Runner ───────────────────────────────────────────────────
+
+def process_pr_visual_test(pr_number: int, sha: str, staging_url: str, branch: str, pr_title: str):
+    """
+    Background worker: runs visual tests for a PR and reports back to GitHub.
+    This mirrors what GitHub Actions does but runs directly on this server.
+    """
+    from utils.github_client import (
+        post_commit_status, upsert_pr_comment,
+        get_pr_info, build_pr_comment
+    )
+    import json as json_  # local alias to avoid shadowing
+
+    cfg = _load_gh_config()
+    pr_key = str(pr_number)
+
+    pr_runs[pr_key]["status"] = "running"
+
+    try:
+        import json as json_mod
+        import shutil
+
+        ci_cfg_path = os.path.join(BASE_DIR, "ci_visual_config.json")
+        baseline_dir = os.path.join(BASE_DIR, "design_baselines")
+
+        if not os.path.exists(baseline_dir):
+            os.makedirs(baseline_dir, exist_ok=True)
+
+        # Load CI config
+        if os.path.exists(ci_cfg_path):
+            with open(ci_cfg_path) as f:
+                ci_cfg = json_mod.load(f)
+        else:
+            ci_cfg = {"threshold": {"ssim_min": 0.85, "change_ratio_max": 0.05, "fail_on_any": True},
+                      "urls_to_test": [{"name": "Homepage", "path": "/", "baseline": "homepage", "enabled": True}],
+                      "noise_tolerance": "medium"}
+
+        tests = ci_cfg.get("urls_to_test", [])
+        results = []
+        job_ids = []
+
+        for i, test in enumerate(tests, 1):
+            if not test.get("enabled", True):
+                continue
+
+            name = test.get("name", f"Test {i}")
+            path = test.get("path", "/")
+            url  = staging_url.rstrip("/") + path
+            bl_key = test.get("baseline", "")
+
+            # Find baseline
+            bl_path = os.path.join(baseline_dir, f"{bl_key}.png")
+            if not os.path.exists(bl_path):
+                # Try baseline from store
+                bl_store_path = baseline_store.get_active_baseline_path_by_slug(bl_key) if hasattr(baseline_store, "get_active_baseline_path_by_slug") else None
+                if bl_store_path and os.path.exists(bl_store_path):
+                    bl_path = bl_store_path
+                else:
+                    results.append({"name": name, "url": url, "passed": False,
+                                    "error": f"No baseline: {bl_key}", "status": "skipped"})
+                    continue
+
+            # Create job
+            job_id = f"pr{pr_number}_{str(uuid.uuid4())[:6]}"
+            job_dir = os.path.join(RUNS_DIR, job_id)
+            os.makedirs(job_dir, exist_ok=True)
+
+            figma_path = os.path.join(job_dir, "figma.png")
+            shutil.copy2(bl_path, figma_path)
+
+            store.save_job(job_id, {
+                "job_id": job_id, "type": "visual_testing_pr",
+                "status": "running", "progress": 10,
+                "step": "PR Visual Test — Capturing...",
+                "stage_url": url, "pr_number": pr_number,
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "result": None,
+            })
+            job_ids.append(job_id)
+
+            try:
+                # Screenshot
+                stage_path = os.path.join(job_dir, "stage.png")
+                viewport = test.get("viewport", ci_cfg.get("viewport", "1440x900"))
+                fullpage = test.get("fullpage", ci_cfg.get("fullpage", True))
+                wait_time = test.get("wait_time_ms", ci_cfg.get("wait_time_ms", 2000))
+
+                store.save_job(job_id, {"step": "Capturing screenshot...", "progress": 20})
+                capture_screenshot(url, stage_path, viewport=viewport, fullpage=fullpage, wait_time=wait_time)
+
+                # Compare
+                store.save_job(job_id, {"step": "Comparing images...", "progress": 55})
+                noise = test.get("noise_tolerance", ci_cfg.get("noise_tolerance", "medium"))
+                cmp = compare_images(figma_path, stage_path, job_dir,
+                                     noise_tolerance=noise, highlight_diffs=True,
+                                     check_layout=ci_cfg.get("check_layout", True),
+                                     check_content=ci_cfg.get("check_content", True),
+                                     check_colors=ci_cfg.get("check_colors", True))
+
+                # Thresholds
+                ssim_min   = ci_cfg["threshold"].get("ssim_min", 0.85)
+                change_max = ci_cfg["threshold"].get("change_ratio_max", 0.05)
+                passed = cmp["ssim"] >= ssim_min and cmp["change_ratio"] <= change_max
+
+                # PDF Report
+                store.save_job(job_id, {"step": "Generating report...", "progress": 80})
+                pdf_path = os.path.join(job_dir, "report.pdf")
+                try:
+                    build_pdf_report(pdf_path=pdf_path, job_id=job_id, stage_url=url,
+                                     metrics=cmp, figma_path=figma_path)
+                except Exception:
+                    pass
+
+                final_result = {
+                    "job_id": job_id,
+                    "passed": passed,
+                    "metrics": {"ssim": cmp["ssim"], "change_ratio": cmp["change_ratio"],
+                                "num_regions": cmp["num_regions"], "issues": cmp["issues"]},
+                    "outputs": {
+                        "diff_overlay": f"/download/{job_id}/diff_overlay.png",
+                        "diff_heatmap": f"/download/{job_id}/diff_heatmap.png",
+                        "aligned_stage": f"/download/{job_id}/stage_aligned.png",
+                        "report_pdf": f"/download/{job_id}/report.pdf",
+                        "figma_png": f"/download/{job_id}/figma.png",
+                    }
+                }
+                store.save_job(job_id, {"status": "completed", "progress": 100,
+                                        "step": "Done", "result": final_result})
+
+                results.append({
+                    "name": name, "url": url, "job_id": job_id, "passed": passed,
+                    "ssim": cmp["ssim"], "change_ratio": cmp["change_ratio"],
+                    "num_regions": cmp["num_regions"], "status": "passed" if passed else "failed"
+                })
+
+            except Exception as e:
+                store.save_job(job_id, {"status": "failed", "error": str(e), "progress": 0})
+                results.append({"name": name, "url": url, "job_id": job_id, "passed": False,
+                                 "error": str(e), "status": "failed"})
+
+        # ── Post back to GitHub ──
+        failed = sum(1 for r in results if not r.get("passed"))
+        final_state = "success" if failed == 0 else "failure"
+        final_desc  = (f"All {len(results)} visual checks passed"
+                       if failed == 0 else f"{failed}/{len(results)} visual check(s) failed")
+
+        if sha:
+            post_commit_status(sha=sha, state=final_state, description=final_desc,
+                               context="visual-regression/qa-framework")
+
+        if pr_number:
+            pr_info = {"title": pr_title, "branch": branch, "base_branch": "main",
+                       "sha": sha, "html_url": "", "success": True}
+            server_url = cfg.get("server_url", "http://127.0.0.1:7860")
+            comment = build_pr_comment(results, pr_info, server_url=server_url)
+            upsert_pr_comment(pr_number, comment)
+
+        pr_runs[pr_key]["status"] = "completed"
+        pr_runs[pr_key]["job_ids"] = job_ids
+        pr_runs[pr_key]["passed"] = failed == 0
+        pr_runs[pr_key]["results"] = results
+
+    except Exception as e:
+        print(f"PR visual test error (PR#{pr_number}): {e}")
+        pr_runs[pr_key]["status"] = "failed"
+        pr_runs[pr_key]["error"] = str(e)
+        if sha:
+            try:
+                from utils.github_client import post_commit_status
+                post_commit_status(sha=sha, state="error",
+                                   description=f"Visual test error: {str(e)[:100]}",
+                                   context="visual-regression/qa-framework")
+            except Exception:
+                pass
+
+
+# ─── PR Dashboard API ────────────────────────────────────────────────────────
+
+@app.get("/api/github/pr-runs")
+def get_pr_runs():
+    """List all tracked PR visual test runs."""
+    return jsonify(list(pr_runs.values()))
+
+
+@app.get("/api/github/pr-runs/<int:pr_number>")
+def get_pr_run(pr_number):
+    """Get status of a specific PR run."""
+    run = pr_runs.get(str(pr_number))
+    if not run:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(run)
+
+
+@app.post("/api/github/pr-runs/<int:pr_number>/trigger")
+def trigger_pr_run(pr_number):
+    """Manually trigger a PR visual test run (from the dashboard UI)."""
+    data = request.get_json() or {}
+    staging_url = data.get("staging_url", "").strip()
+    sha = data.get("sha", "").strip()
+    branch = data.get("branch", "unknown")
+    title  = data.get("title", f"PR #{pr_number}")
+
+    if not staging_url:
+        return jsonify({"error": "staging_url is required"}), 400
+
+    pr_runs[str(pr_number)] = {
+        "pr_number": pr_number,
+        "sha": sha,
+        "branch": branch,
+        "title": title,
+        "staging_url": staging_url,
+        "status": "queued",
+        "created_at": datetime.datetime.utcnow().isoformat(),
+        "job_ids": [],
+    }
+
+    thread = threading.Thread(
+        target=process_pr_visual_test,
+        args=(pr_number, sha, staging_url, branch, title),
+        daemon=True
+    )
+    thread.start()
+    return jsonify({"success": True, "message": "PR visual test triggered", "pr_number": pr_number})
+
+
+# ─── CI Results API ──────────────────────────────────────────────────────────
+
+@app.get("/api/ci/results")
+def list_ci_results():
+    """List CI result JSON files."""
+    results = []
+    for fname in sorted(os.listdir(CI_RESULTS_DIR), reverse=True):
+        if fname.endswith(".json"):
+            fpath = os.path.join(CI_RESULTS_DIR, fname)
+            try:
+                with open(fpath) as f:
+                    d = json.load(f)
+                results.append({
+                    "file": fname,
+                    "timestamp": d.get("timestamp"),
+                    "staging_url": d.get("staging_url"),
+                    "pr_number": d.get("pr_number"),
+                    "total_tests": d.get("total_tests", 0),
+                    "passed": d.get("passed", 0),
+                    "failed": d.get("failed", 0),
+                    "build_should_fail": d.get("build_should_fail", False),
+                })
+            except Exception:
+                pass
+    return jsonify(results[:50])
+
+
+# ─── GitHub Pages ────────────────────────────────────────────────────────────
+
+@app.get("/github")
+def github_page():
+    return app.send_static_file("github.html")
+
+
+@app.get("/ci-dashboard")
+def ci_dashboard():
+    return app.send_static_file("ci_dashboard.html")
+
+
+# ─── EXISTING Git Push routes (already in app) ───────────────────────────────
+# (kept intact, only adding new routes above)
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=7860, debug=True)
+
 

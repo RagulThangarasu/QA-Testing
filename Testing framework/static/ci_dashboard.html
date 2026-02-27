@@ -1,0 +1,1084 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>CI/CD Dashboard — Visual Regression | QA Framework</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/header.css" />
+    <style>
+        /* ── CI Dashboard Styles ── */
+        .ci-layout {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 24px;
+            margin-top: 20px;
+        }
+
+        @media(max-width:900px) {
+            .ci-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .ci-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* GitHub Status Card */
+        .gh-status-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            animation: fadeInUp .5s ease-out;
+        }
+
+        .gh-status-card h3 {
+            margin: 0 0 14px;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .gh-connected {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(16, 185, 129, .1);
+            border: 1px solid rgba(16, 185, 129, .2);
+            border-radius: 8px;
+            font-size: .85rem;
+            color: #34d399;
+        }
+
+        .gh-disconnected {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(239, 68, 68, .1);
+            border: 1px solid rgba(239, 68, 68, .2);
+            border-radius: 8px;
+            font-size: .85rem;
+            color: #f87171;
+        }
+
+        .gh-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: .82rem;
+        }
+
+        .gh-stat:last-child {
+            border-bottom: none;
+        }
+
+        .gh-stat .key {
+            color: var(--muted);
+        }
+
+        .gh-stat .val {
+            color: var(--fg);
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .78rem;
+        }
+
+        /* PR List */
+        .pr-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            cursor: pointer;
+            transition: var(--transition);
+            animation: fadeInUp .5s ease-out;
+        }
+
+        .pr-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .pr-card.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+        }
+
+        .pr-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .pr-title {
+            font-weight: 600;
+            font-size: .9rem;
+            color: var(--fg);
+        }
+
+        .pr-number {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .75rem;
+            color: var(--accent);
+            background: rgba(59, 130, 246, .1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+
+        .pr-meta {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            font-size: .75rem;
+            color: var(--muted);
+        }
+
+        .pr-branch {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(99, 102, 241, .1);
+            color: #a78bfa;
+            padding: 1px 8px;
+            border-radius: 8px;
+        }
+
+        /* Pipeline steps */
+        .pipeline-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            animation: fadeInUp .5s ease-out .1s both;
+        }
+
+        .pipeline-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin: 0 0 16px;
+        }
+
+        .pipeline {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+
+        .pipe-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 90px;
+            gap: 6px;
+        }
+
+        .pipe-step:not(:last-child)::after {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 2px;
+            background: var(--border);
+            margin-top: -22px;
+            position: relative;
+            left: 50px;
+            z-index: 0;
+        }
+
+        .pipe-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            border: 2px solid var(--border);
+            background: var(--bg-elevated);
+            transition: var(--transition);
+            position: relative;
+            z-index: 1;
+        }
+
+        .pipe-label {
+            font-size: .68rem;
+            color: var(--muted);
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .pipe-step.done .pipe-icon {
+            background: rgba(16, 185, 129, .15);
+            border-color: rgba(16, 185, 129, .4);
+        }
+
+        .pipe-step.active .pipe-icon {
+            background: rgba(59, 130, 246, .15);
+            border-color: var(--accent);
+            animation: pulseGlow 2s infinite;
+        }
+
+        .pipe-step.failed .pipe-icon {
+            background: rgba(239, 68, 68, .15);
+            border-color: rgba(239, 68, 68, .4);
+        }
+
+        .pipe-step.pending .pipe-icon {
+            opacity: .45;
+        }
+
+        /* Test result rows */
+        .url-result-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            transition: var(--transition);
+            animation: slideInLeft .3s ease-out;
+        }
+
+        .url-result-card:hover {
+            border-color: var(--border-hover);
+        }
+
+        .url-result-card.pass {
+            border-left: 3px solid var(--success);
+        }
+
+        .url-result-card.fail {
+            border-left: 3px solid var(--error);
+        }
+
+        .url-result-card.skip {
+            border-left: 3px solid var(--warning);
+        }
+
+        .url-result-icon {
+            font-size: 1.4rem;
+            min-width: 28px;
+        }
+
+        .url-result-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .url-result-name {
+            font-weight: 600;
+            font-size: .9rem;
+            margin: 0 0 2px;
+        }
+
+        .url-result-url {
+            font-size: .75rem;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .url-result-metrics {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .metric-pill {
+            font-size: .72rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .metric-pill.ssim {
+            background: rgba(59, 130, 246, .12);
+            color: #60a5fa;
+        }
+
+        .metric-pill.change {
+            background: rgba(245, 158, 11, .12);
+            color: #fbbf24;
+        }
+
+        .metric-pill.regions {
+            background: rgba(239, 68, 68, .12);
+            color: #f87171;
+        }
+
+        /* Config Editor */
+        .config-editor {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+
+        .config-editor textarea {
+            width: 100%;
+            height: 280px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .8rem;
+            line-height: 1.6;
+            resize: vertical;
+        }
+
+        /* Webhook setup */
+        .webhook-url-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, .3);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .8rem;
+            color: #93c5fd;
+            word-break: break-all;
+        }
+
+        .btn-copy {
+            padding: 5px 10px;
+            font-size: .75rem;
+            background: rgba(59, 130, 246, .15);
+            border: 1px solid rgba(59, 130, 246, .3);
+            color: var(--accent);
+            border-radius: 6px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .btn-copy:hover {
+            background: rgba(59, 130, 246, .3);
+        }
+
+        /* Tabs */
+        .dash-tabs {
+            display: flex;
+            gap: 4px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        .dash-tab {
+            padding: 9px 18px;
+            border: none;
+            background: none;
+            color: var(--muted);
+            font-size: .88rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: var(--transition);
+        }
+
+        .dash-tab:hover {
+            color: var(--fg);
+            transform: none;
+            box-shadow: none;
+        }
+
+        .dash-tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* Empty states */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--muted);
+        }
+
+        .empty-state .empty-icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+        }
+
+        .empty-state p {
+            font-size: .9rem;
+        }
+
+        /* Trigger form */
+        .trigger-form {
+            background: rgba(59, 130, 246, .05);
+            border: 1px solid rgba(59, 130, 246, .15);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .trigger-form h4 {
+            margin: 0 0 12px;
+            color: var(--fg);
+            font-size: .9rem;
+        }
+
+        .trigger-form .row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .trigger-form input {
+            flex: 1;
+        }
+
+        /* Action indicators */
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(59, 130, 246, .3);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin .7s linear infinite;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="header-brand">
+            <div class="header-brand-text">
+                <span class="header-brand-name">QA Testing Framework</span>
+                <span class="header-brand-tagline">CI/CD — Visual Regression Dashboard</span>
+            </div>
+        </div>
+        <nav>
+            <a href="/">Visual Testing</a>
+            <a href="/ci-dashboard" class="active">CI/CD Dashboard</a>
+            <a href="/broken-links">Broken Links</a>
+            <a href="/accessibility">Accessibility</a>
+            <a href="/seo-performance">SEO &amp; Perf</a>
+            <a href="/functional">AI Functional</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <div
+            style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; padding-top:16px;">
+            <div>
+                <h1
+                    style="margin:0; background:linear-gradient(135deg,#60a5fa,#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">
+                    CI/CD Pipeline Dashboard
+                </h1>
+                <p style="margin:4px 0 0; color:var(--muted); font-size:.88rem;">Visual regression validation on every
+                    Pull Request</p>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button id="btn-refresh" class="btn-secondary" onclick="loadAll()" style="font-size:13px;">🔄
+                    Refresh</button>
+                <button class="btn-approve" onclick="document.getElementById('tab-setup').click()"
+                    style="font-size:13px;">⚙️ Setup</button>
+            </div>
+        </div>
+
+        <!-- ── Tabs ── -->
+        <div class="dash-tabs">
+            <button class="dash-tab active" id="tab-prs" onclick="switchTab('prs')">🔁 PR Runs</button>
+            <button class="dash-tab" id="tab-workflow" onclick="switchTab('workflow')">🏗 Pipeline Flow</button>
+            <button class="dash-tab" id="tab-setup" onclick="switchTab('setup')">⚙️ GitHub Setup</button>
+            <button class="dash-tab" id="tab-config" onclick="switchTab('config')">📋 CI Config</button>
+        </div>
+
+        <!-- ═════ PR RUNS TAB ═════ -->
+        <div class="tab-panel active" id="panel-prs">
+            <div class="ci-layout">
+                <!-- Sidebar: PR List -->
+                <div class="ci-sidebar">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <h3 style="margin:0; font-size:.95rem;">Open Pull Requests</h3>
+                        <button onclick="loadPRList()" class="btn-secondary"
+                            style="font-size:11px; padding:4px 10px;">🔄</button>
+                    </div>
+                    <div id="pr-list">
+                        <div class="empty-state">
+                            <div class="empty-icon">🔁</div>
+                            <p>Loading PRs...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main: PR Detail / Manual Trigger -->
+                <div>
+                    <!-- Manual Trigger -->
+                    <div class="trigger-form">
+                        <h4>🚀 Manually Trigger PR Visual Test</h4>
+                        <div class="row">
+                            <label style="flex:0 0 80px; font-size:.82rem;">PR #
+                                <input type="number" id="trig-pr" placeholder="123" style="margin-top:4px;" />
+                            </label>
+                            <label style="flex:1; font-size:.82rem;">Staging URL
+                                <input type="url" id="trig-url" placeholder="https://pr-123.staging.example.com"
+                                    style="margin-top:4px;" />
+                            </label>
+                            <label style="flex:0 0 120px; font-size:.82rem;">Branch
+                                <input type="text" id="trig-branch" placeholder="feature/xyz" style="margin-top:4px;" />
+                            </label>
+                            <button onclick="triggerPRTest()" class="btn-approve"
+                                style="font-size:13px; padding:10px 16px; white-space:nowrap; align-self:flex-end;">▶
+                                Run Tests</button>
+                        </div>
+                    </div>
+
+                    <!-- PR Run Detail -->
+                    <div id="pr-detail">
+                        <div class="empty-state">
+                            <div class="empty-icon">🔍</div>
+                            <p>Select a PR from the left or trigger a manual run above.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═════ PIPELINE FLOW TAB ═════ -->
+        <div class="tab-panel" id="panel-workflow">
+            <div
+                style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:28px; margin-bottom:20px;">
+                <h3 style="margin:0 0 20px; font-size:1.05rem;">🏗 Complete CI/CD Visual Testing Pipeline</h3>
+                <div class="pipeline">
+                    <div class="pipe-step done">
+                        <div class="pipe-icon">🔁</div>
+                        <div class="pipe-label">PR Opened / Updated</div>
+                    </div>
+                    <div class="pipe-step done">
+                        <div class="pipe-icon">⚡</div>
+                        <div class="pipe-label">Webhook Trigger</div>
+                    </div>
+                    <div class="pipe-step done">
+                        <div class="pipe-icon">⏳</div>
+                        <div class="pipe-label">Pending Status Posted</div>
+                    </div>
+                    <div class="pipe-step done">
+                        <div class="pipe-icon">🌍</div>
+                        <div class="pipe-label">Staging URL Detected</div>
+                    </div>
+                    <div class="pipe-step done">
+                        <div class="pipe-icon">📸</div>
+                        <div class="pipe-label">Screenshots Captured</div>
+                    </div>
+                    <div class="pipe-step done">
+                        <div class="pipe-icon">🔬</div>
+                        <div class="pipe-label">Image Comparison</div>
+                    </div>
+                    <div class="pipe-step done">
+                        <div class="pipe-icon">📊</div>
+                        <div class="pipe-label">Report Generated</div>
+                    </div>
+                    <div class="pipe-step done">
+                        <div class="pipe-icon">💬</div>
+                        <div class="pipe-label">PR Comment Posted</div>
+                    </div>
+                    <div class="pipe-step done">
+                        <div class="pipe-icon">✅</div>
+                        <div class="pipe-label">Status Check Updated</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                <div
+                    style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px;">
+                    <h4 style="margin:0 0 12px; color:var(--fg);">🔀 GitHub Actions Flow</h4>
+                    <ol style="margin:0; padding-left:18px; color:var(--muted); font-size:.85rem; line-height:2;">
+                        <li>PR opened/updated on GitHub</li>
+                        <li>Actions workflow triggers (<code>visual_tests.yml</code>)</li>
+                        <li>Detect staging URL from PR labels or secrets</li>
+                        <li>Wait for staging to be accessible</li>
+                        <li>Download approved baselines from artifacts cache</li>
+                        <li>Run <code>run_visual_ci.py</code> for each configured page</li>
+                        <li>Compare screenshots using SSIM + CV2</li>
+                        <li>Post ✅/❌ commit status check</li>
+                        <li>Post detailed PR comment with table + links</li>
+                        <li>Upload artifacts (diffs, PDFs, JSON summary)</li>
+                    </ol>
+                </div>
+                <div
+                    style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px;">
+                    <h4 style="margin:0 0 12px; color:var(--fg);">⚡ Server Webhook Flow</h4>
+                    <ol style="margin:0; padding-left:18px; color:var(--muted); font-size:.85rem; line-height:2;">
+                        <li>PR event webhook received at <code>/api/github/webhook</code></li>
+                        <li>HMAC-SHA256 signature verified</li>
+                        <li>Staging URL resolved from PR label or config</li>
+                        <li>Pending status posted to commit immediately</li>
+                        <li>Background thread spawned per PR</li>
+                        <li>Screenshots taken via Playwright</li>
+                        <li>Images compared via SSIM + semantic classification</li>
+                        <li>PDF + diff overlay generated per page</li>
+                        <li>PR comment upserted (update existing bot comment)</li>
+                        <li>Final ✅/❌ commit status posted</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div
+                style="margin-top:20px; background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.2); border-radius:10px; padding:16px;">
+                <h4 style="margin:0 0 8px; color:#fbbf24;">🏷 Staging URL Detection (Priority Order)</h4>
+                <ol style="margin:0; padding-left:18px; color:var(--muted); font-size:.84rem; line-height:1.9;">
+                    <li><strong style="color:#fbbf24;">PR Label</strong> — Add label
+                        <code>staging-url:https://pr-123.staging.example.com</code> to any PR</li>
+                    <li><strong style="color:#fbbf24;">STAGING_BASE_URL secret</strong> — Set in GitHub Secrets +
+                        <code>/pr-{number}</code> appended</li>
+                    <li><strong style="color:#fbbf24;">STAGING_URL secret</strong> — Fixed staging URL used for all PRs
+                    </li>
+                    <li><strong style="color:#fbbf24;">Manual trigger</strong> — Enter URL in the CI Dashboard or
+                        <code>workflow_dispatch</code> input</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- ═════ GITHUB SETUP TAB ═════ -->
+        <div class="tab-panel" id="panel-setup">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                <!-- GitHub Config Form -->
+                <div>
+                    <div class="gh-status-card">
+                        <h3>🐙 GitHub Connection</h3>
+                        <div id="gh-conn-status" class="gh-disconnected">⭕ Not connected</div>
+                        <div id="gh-conn-stats" style="margin-top:14px; display:none;">
+                            <div class="gh-stat"><span class="key">Account</span><span class="val"
+                                    id="gh-login">–</span></div>
+                            <div class="gh-stat"><span class="key">Repository</span><span class="val"
+                                    id="gh-reponame">–</span></div>
+                            <div class="gh-stat"><span class="key">Webhook</span><span class="val"
+                                    id="gh-webhook-status">–</span></div>
+                        </div>
+                        <form id="gh-config-form" style="margin-top:16px;">
+                            <label
+                                style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;font-size:.85rem; color:var(--muted);">
+                                Personal Access Token (repo + statuses + issues scope)
+                                <input type="password" id="cfg-token" placeholder="ghp_..." autocomplete="off" />
+                            </label>
+                            <div style="display:flex;gap:8px;margin-bottom:10px;">
+                                <label
+                                    style="flex:1;display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted);">
+                                    Owner <input type="text" id="cfg-owner" placeholder="RagulThangarasu" />
+                                </label>
+                                <label
+                                    style="flex:1;display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted);">
+                                    Repo <input type="text" id="cfg-repo" placeholder="QA-Testing" />
+                                </label>
+                            </div>
+                            <label
+                                style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;font-size:.85rem;color:var(--muted);">
+                                Webhook Secret (generate a random secret)
+                                <input type="password" id="cfg-webhook-secret" placeholder="your-webhook-secret" />
+                            </label>
+                            <label
+                                style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px;font-size:.85rem;color:var(--muted);">
+                                Staging URL (fallback when no PR label)
+                                <input type="url" id="cfg-staging-url" placeholder="https://staging.example.com" />
+                            </label>
+                            <button type="submit" class="btn-approve" style="width:100%;">💾 Save &amp; Test
+                                Connection</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Webhook Setup -->
+                <div>
+                    <div class="gh-status-card">
+                        <h3>🔗 Webhook Setup</h3>
+                        <p style="color:var(--muted);font-size:.83rem;margin:0 0 12px;">
+                            Add this URL as a webhook in your GitHub repo:<br>
+                            <strong>Settings → Webhooks → Add Webhook</strong>
+                        </p>
+                        <label style="font-size:.8rem; color:var(--muted); display:block; margin-bottom:6px;">Payload
+                            URL</label>
+                        <div class="webhook-url-box">
+                            <span id="webhook-url">http://YOUR-SERVER:7860/api/github/webhook</span>
+                            <button class="btn-copy" onclick="copyWebhook()">📋 Copy</button>
+                        </div>
+                        <div
+                            style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:.8rem; color:var(--muted);">
+                            <div><strong style="color:var(--fg);">Content type:</strong><br>application/json</div>
+                            <div><strong style="color:var(--fg);">Events:</strong><br>Pull requests, Pushes</div>
+                        </div>
+                        <div
+                            style="margin-top:14px; padding:10px; background:rgba(59,130,246,.07); border:1px solid rgba(59,130,246,.15); border-radius:8px; font-size:.78rem; color:var(--muted);">
+                            💡 <strong style="color:#60a5fa;">GitHub Secrets to set:</strong>
+                            <ul style="margin:8px 0 0; padding-left:16px; line-height:1.9;">
+                                <li><code>STAGING_URL</code> — Your staging environment URL</li>
+                                <li><code>STAGING_BASE_URL</code> — Base URL, appends <code>/pr-{N}</code></li>
+                                <li><code>QA_SERVER_URL</code> — This server's public URL</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- GitHub Actions Keys -->
+                    <div class="gh-status-card" style="margin-top:16px;">
+                        <h3>🏃 GitHub Actions</h3>
+                        <p style="color:var(--muted);font-size:.83rem;margin:0 0 10px;">Workflow file:
+                            <code>.github/workflows/visual_tests.yml</code></p>
+                        <div style="font-size:.8rem; color:var(--muted); line-height:1.9;">
+                            <div>✅ Triggers on: <strong style="color:var(--fg);">PR open/update/reopen</strong></div>
+                            <div>✅ Posts: <strong style="color:var(--fg);">commit status checks</strong></div>
+                            <div>✅ Comments: <strong style="color:var(--fg);">detailed PR comment (upserted)</strong>
+                            </div>
+                            <div>✅ Uploads: <strong style="color:var(--fg);">artifacts (diffs, PDFs)</strong></div>
+                            <div>✅ Caches: <strong style="color:var(--fg);">baselines between runs</strong></div>
+                            <div>✅ Promotes: <strong style="color:var(--fg);">baselines on passing merge to
+                                    main</strong></div>
+                        </div>
+                        <a href="https://github.com/RagulThangarasu/QA-Testing/actions" target="_blank"
+                            class="btn-secondary"
+                            style="display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:.83rem;text-decoration:none;padding:7px 14px;">
+                            🔗 View Actions Tab
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═════ CI CONFIG TAB ═════ -->
+        <div class="tab-panel" id="panel-config">
+            <div class="config-editor">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                    <h3 style="margin:0;">📋 CI Visual Config (<code>ci_visual_config.json</code>)</h3>
+                    <div style="display:flex;gap:10px;">
+                        <button onclick="saveConfig()" class="btn-approve" style="font-size:13px;">💾 Save</button>
+                        <button onclick="loadConfig()" class="btn-secondary" style="font-size:13px;">🔄 Reload</button>
+                    </div>
+                </div>
+                <textarea id="config-editor" spellcheck="false"></textarea>
+                <div id="config-msg" style="margin-top:8px;font-size:.82rem;"></div>
+            </div>
+
+            <!-- URL table for CI config -->
+            <div
+                style="margin-top:20px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px;">
+                <h4 style="margin:0 0 12px;">🗂 Configured Test Pages</h4>
+                <div id="ci-url-table"></div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script>
+        // ── Toast ──
+        function showToast(msg, isError = false) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.remove('hidden');
+            t.classList.toggle('error', isError);
+            setTimeout(() => t.classList.add('hidden'), 4000);
+        }
+
+        // ── Tab Switcher ──
+        const TABS = ['prs', 'workflow', 'setup', 'config'];
+        function switchTab(name) {
+            TABS.forEach(t => {
+                document.getElementById('tab-' + t).classList.toggle('active', t === name);
+                document.getElementById('panel-' + t).classList.toggle('active', t === name);
+            });
+            if (name === 'prs') loadPRList();
+            if (name === 'setup') loadGhStatus();
+            if (name === 'config') loadConfig();
+        }
+
+        // ── Load All ──
+        async function loadAll() { await loadPRList(); }
+
+        // ── PR List ──
+        async function loadPRList() {
+            const container = document.getElementById('pr-list');
+            container.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+            try {
+                // Load open PRs from GitHub
+                const [ghRes, runsRes] = await Promise.all([
+                    fetch('/api/github/prs').then(r => r.json()),
+                    fetch('/api/github/pr-runs').then(r => r.json()),
+                ]);
+                const prs = ghRes.prs || [];
+                const runs = Array.isArray(runsRes) ? runsRes : [];
+
+                if (prs.length === 0 && runs.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔁</div><p>No open PRs found.</p></div>';
+                    return;
+                }
+
+                // Merge: create a unified list from open PRs + runs
+                const allPrs = [...prs];
+                runs.forEach(r => {
+                    if (!allPrs.find(p => p.number === r.pr_number)) {
+                        allPrs.push({ number: r.pr_number, title: r.title || `PR #${r.pr_number}`, branch: r.branch || '', author: '' });
+                    }
+                });
+
+                container.innerHTML = allPrs.map(pr => {
+                    const run = runs.find(r => r.pr_number === pr.number);
+                    const statusIcon = run ? (run.status === 'completed' ? (run.passed ? '✅' : '❌') : run.status === 'running' ? '🔄' : '⏳') : '–';
+                    return `<div class="pr-card" onclick="loadPRDetail(${pr.number})" id="prc-${pr.number}">
+        <div class="pr-header">
+          <span class="pr-title">${pr.title}</span>
+          <span class="pr-number">#${pr.number} ${statusIcon}</span>
+        </div>
+        <div class="pr-meta">
+          <span class="pr-branch">${pr.branch}</span>
+          ${pr.author ? `<span>by ${pr.author}</span>` : ''}
+          ${run ? `<span style="color:${run.passed ? 'var(--success)' : 'var(--error)'};">${run.status}</span>` : ''}
+        </div>
+      </div>`;
+                }).join('');
+            } catch (e) {
+                container.innerHTML = `<div class="empty-state" style="color:var(--error);">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function loadPRDetail(prNumber) {
+            document.querySelectorAll('.pr-card').forEach(c => c.classList.remove('selected'));
+            const prc = document.getElementById('prc-' + prNumber);
+            if (prc) prc.classList.add('selected');
+
+            const container = document.getElementById('pr-detail');
+            container.innerHTML = '<div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>';
+
+            try {
+                const run = await fetch('/api/github/pr-runs/' + prNumber).then(r => r.ok ? r.json() : null);
+                if (!run) {
+                    container.innerHTML = `<div class="empty-state"><p>No test run found for PR #${prNumber}.<br>Click <strong>▶ Run Tests</strong> above to start.</p></div>`;
+                    document.getElementById('trig-pr').value = prNumber;
+                    return;
+                }
+
+                const statusPill = run.status === 'completed'
+                    ? (run.passed ? '<span style="color:var(--success);font-weight:700;">✅ PASSED</span>' : '<span style="color:var(--error);font-weight:700;">❌ FAILED</span>')
+                    : `<span style="color:var(--accent);">${run.status === 'running' ? '🔄 Running...' : '⏳ ' + run.status}</span>`;
+
+                const testsHtml = (run.results || []).map(r => `
+      <div class="url-result-card ${r.passed ? 'pass' : r.status === 'skipped' ? 'skip' : 'fail'}">
+        <div class="url-result-icon">${r.passed ? '✅' : r.status === 'skipped' ? '⚠️' : '❌'}</div>
+        <div class="url-result-info">
+          <div class="url-result-name">${r.name || ''}</div>
+          <div class="url-result-url">${r.url || ''}</div>
+          <div class="url-result-metrics" style="margin-top:5px;">
+            ${r.ssim !== undefined ? `<span class="metric-pill ssim">SSIM ${r.ssim.toFixed(3)}</span>` : ''}
+            ${r.change_ratio !== undefined ? `<span class="metric-pill change">Δ ${(r.change_ratio * 100).toFixed(1)}%</span>` : ''}
+            ${r.num_regions !== undefined ? `<span class="metric-pill regions">${r.num_regions} regions</span>` : ''}
+            ${r.error ? `<span style="color:var(--error);font-size:.72rem;">${r.error}</span>` : ''}
+          </div>
+        </div>
+        ${r.job_id ? `<a href="/download/${r.job_id}/report.pdf" target="_blank" class="btn-secondary" style="font-size:11px;padding:5px 10px;text-decoration:none;">📊 PDF</a>` : ''}
+      </div>`).join('') || '<div style="color:var(--muted);font-size:.85rem;">No test results yet.</div>';
+
+                container.innerHTML = `
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+          <div>
+            <h3 style="margin:0 0 4px;font-size:1.05rem;">${run.title || 'PR #' + prNumber}</h3>
+            <div style="font-size:.8rem;color:var(--muted);">
+              <span class="pr-branch" style="margin-right:8px;">${run.branch || ''}</span>
+              SHA: <code>${(run.sha || '').substring(0, 8)}</code>
+            </div>
+          </div>
+          ${statusPill}
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);">
+          <span>🌐 Staging: <a href="${run.staging_url || ''}" target="_blank" style="color:var(--accent);">${run.staging_url || '–'}</a></span>
+          <span>🕐 Started: ${run.created_at ? new Date(run.created_at).toLocaleString() : '–'}</span>
+        </div>
+      </div>
+      <h4 style="margin:0 0 12px;font-size:.95rem;">🔍 URL Test Results</h4>
+      ${testsHtml}
+      <button onclick="triggerSpecificPR(${prNumber},'${run.staging_url || ''}','${run.branch || ''}')" class="btn-secondary" style="margin-top:14px;font-size:13px;">
+        🔄 Re-run Tests
+      </button>
+    `;
+            } catch (e) {
+                container.innerHTML = `<div style="color:var(--error);">Error: ${e.message}</div>`;
+            }
+        }
+
+        // ── Trigger ──
+        async function triggerPRTest() {
+            const pr = document.getElementById('trig-pr').value.trim();
+            const url = document.getElementById('trig-url').value.trim();
+            const branch = document.getElementById('trig-branch').value.trim() || 'unknown';
+            if (!pr || !url) { showToast('PR # and Staging URL are required', true); return; }
+            try {
+                const res = await fetch(`/api/github/pr-runs/${pr}/trigger`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ staging_url: url, branch, title: `PR #${pr}` })
+                });
+                const d = await res.json();
+                if (d.success) { showToast(`✅ PR #${pr} visual test triggered!`); setTimeout(() => { loadPRList(); loadPRDetail(parseInt(pr)); }, 2000); }
+                else showToast(d.error || 'Trigger failed', true);
+            } catch (e) { showToast('Error: ' + e.message, true); }
+        }
+
+        function triggerSpecificPR(num, url, branch) {
+            document.getElementById('trig-pr').value = num;
+            document.getElementById('trig-url').value = url;
+            document.getElementById('trig-branch').value = branch;
+            window.scrollTo(0, 0);
+        }
+
+        // ── GitHub Status ──
+        async function loadGhStatus() {
+            try {
+                const d = await fetch('/api/github/config').then(r => r.json());
+                const status = document.getElementById('gh-conn-status');
+                const stats = document.getElementById('gh-conn-stats');
+                document.getElementById('cfg-owner').value = d.owner || '';
+                document.getElementById('cfg-repo').value = d.repo || '';
+                document.getElementById('cfg-staging-url').value = d.staging_url || '';
+
+                if (d.login && d.login !== '–') {
+                    status.className = 'gh-connected';
+                    status.textContent = `✅ Connected as @${d.login}`;
+                    document.getElementById('gh-login').textContent = d.login;
+                    document.getElementById('gh-reponame').textContent = `${d.owner}/${d.repo}`;
+                    document.getElementById('gh-webhook-status').textContent = d.webhook_secret ? 'Configured ✅' : 'Not set ⚠️';
+                    stats.style.display = 'block';
+                } else {
+                    status.className = 'gh-disconnected';
+                    status.textContent = '⭕ Not connected — enter credentials below';
+                    stats.style.display = 'none';
+                }
+
+                // Set webhook URL
+                const wh = document.getElementById('webhook-url');
+                if (wh) wh.textContent = `${window.location.origin}/api/github/webhook`;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        document.getElementById('gh-config-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type=submit]');
+            btn.disabled = true; btn.textContent = '⏳ Saving...';
+            try {
+                const body = {
+                    token: document.getElementById('cfg-token').value,
+                    owner: document.getElementById('cfg-owner').value,
+                    repo: document.getElementById('cfg-repo').value,
+                    webhook_secret: document.getElementById('cfg-webhook-secret').value,
+                    staging_url: document.getElementById('cfg-staging-url').value,
+                };
+                const res = await fetch('/api/github/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const d = await res.json();
+                if (d.success) { showToast(`✅ Connected as @${d.login}`); loadGhStatus(); }
+                else showToast(d.error || 'Failed', true);
+            } catch (err) { showToast('Error: ' + err.message, true); }
+            finally { btn.disabled = false; btn.textContent = '💾 Save & Test Connection'; }
+        });
+
+        function copyWebhook() {
+            navigator.clipboard.writeText(document.getElementById('webhook-url').textContent);
+            showToast('Webhook URL copied!');
+        }
+
+        // ── Config Editor ──
+        async function loadConfig() {
+            try {
+                const r = await fetch('/api/ci/config');
+                if (r.ok) {
+                    const d = await r.json();
+                    document.getElementById('config-editor').value = JSON.stringify(d, null, 2);
+                    renderConfigTable(d);
+                } else {
+                    // Try loading from file directly
+                    document.getElementById('config-editor').value = 'Config not found. Edit and save to create ci_visual_config.json';
+                }
+            } catch (e) {
+                document.getElementById('config-editor').value = `{\n  "note": "Could not load config: ${e.message}. Edit and save manually."\n}`;
+            }
+        }
+
+        async function saveConfig() {
+            const val = document.getElementById('config-editor').value;
+            let parsed;
+            try { parsed = JSON.parse(val); }
+            catch (e) { document.getElementById('config-msg').innerHTML = `<span style="color:var(--error);">❌ Invalid JSON: ${e.message}</span>`; return; }
+            try {
+                const r = await fetch('/api/ci/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsed) });
+                const d = await r.json();
+                if (d.success) {
+                    document.getElementById('config-msg').innerHTML = '<span style="color:var(--success);">✅ Saved!</span>';
+                    renderConfigTable(parsed);
+                } else showToast(d.error || 'Save failed', true);
+            } catch (e) { showToast('Error: ' + e.message, true); }
+        }
+
+        function renderConfigTable(cfg) {
+            const urls = cfg.urls_to_test || [];
+            const t = document.getElementById('ci-url-table');
+            if (!urls.length) { t.innerHTML = '<p style="color:var(--muted);">No URLs configured.</p>'; return; }
+            t.innerHTML = `<table style="width:100%;border-collapse:collapse;">
+    <thead><tr>
+      <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);color:var(--muted);font-size:.8rem;">Name</th>
+      <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);color:var(--muted);font-size:.8rem;">Path</th>
+      <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);color:var(--muted);font-size:.8rem;">Baseline Key</th>
+      <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);color:var(--muted);font-size:.8rem;">Viewport</th>
+      <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);color:var(--muted);font-size:.8rem;">Enabled</th>
+    </tr></thead>
+    <tbody>
+      ${urls.map(u => `<tr>
+        <td style="padding:8px;font-size:.85rem;">${u.name || ''}</td>
+        <td style="padding:8px;font-family:monospace;font-size:.78rem;color:#60a5fa;">${u.path || u.url || ''}</td>
+        <td style="padding:8px;font-family:monospace;font-size:.78rem;color:#a78bfa;">${u.baseline || ''}</td>
+        <td style="padding:8px;font-size:.82rem;">${u.viewport || cfg.viewport || '1440x900'}</td>
+        <td style="padding:8px;">${u.enabled !== false ? '✅' : '⛔'}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+        }
+
+        // ── CI Config Save/Load ──
+        // Register /api/ci/config get+post routes on the backend
+        // Handled below
+
+        // ── Init ──
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPRList();
+            if (document.getElementById('webhook-url'))
+                document.getElementById('webhook-url').textContent = window.location.origin + '/api/github/webhook';
+        });
+
+        setInterval(() => {
+            const panel = document.querySelector('.tab-panel.active');
+            if (panel && panel.id === 'panel-prs') loadPRList();
+        }, 15000);
+    </script>
+</body>
+
+</html>

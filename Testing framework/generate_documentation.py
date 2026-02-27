@@ -3,8 +3,14 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image, KeepTogether
 from reportlab.lib.units import inch
-import os
+import os, signal, sys
 from datetime import datetime
+
+# Handle "[Errno 32] Broken pipe" gracefully (common when piping output)
+try:
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+except Exception:
+    pass
 
 def generate_pdf_documentation(filename="QA_Testing_Framework_Documentation.pdf"):
     # Adjusted margins to giving more width (0.75 inch = 54 pts)

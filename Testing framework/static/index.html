@@ -3,14 +3,691 @@
 
 <head>
   <meta charset="utf-8" />
-  <title>Visual Testing — Figma vs Stage</title>
+  <title>Visual Testing Studio — QA Framework</title>
+  <meta name="description"
+    content="AI-powered Visual Regression Testing — Compare Figma designs vs live stage with pixel-perfect accuracy." />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css" />
   <link rel="stylesheet" href="/static/header.css" />
   <link rel="stylesheet" href="/static/loader.css" />
   <link rel="stylesheet" href="/static/issues.css" />
   <link rel="stylesheet" href="/static/toggle.css" />
   <link rel="stylesheet" href="/static/file_upload.css" />
+  <style>
+    /* ── Visual Testing Studio Specific Styles ── */
+    .vt-hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding: 20px 0 0;
+      gap: 16px;
+    }
+
+    .vt-hero-title {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .vt-hero-title h1 {
+      margin: 0;
+      font-size: 1.8rem;
+      background: linear-gradient(135deg, #e9eefc 0%, #93c5fd 50%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .vt-hero-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .vt-hero-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    /* ── Mode Tabs ── */
+    .mode-tabs {
+      display: flex;
+      gap: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 5px;
+      margin-bottom: 20px;
+      animation: fadeInUp 0.5s ease-out;
+    }
+
+    .mode-tab {
+      flex: 1;
+      padding: 9px 16px;
+      border-radius: 7px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.88rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+
+    .mode-tab:hover {
+      color: var(--fg);
+      background: rgba(59, 130, 246, 0.07);
+      transform: none;
+      box-shadow: none;
+    }
+
+    .mode-tab.active {
+      background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+      color: white;
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+
+    .mode-tab .tab-icon {
+      font-size: 1rem;
+    }
+
+    /* ── Metrics Dashboard ── */
+    .metrics-dashboard {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
+    }
+
+    @media (max-width: 900px) {
+      .metrics-dashboard {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .metric-card:hover {
+      border-color: var(--border-hover);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .metric-card:hover::before {
+      opacity: 1;
+    }
+
+    .metric-card-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .metric-card-value {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--fg);
+      line-height: 1;
+    }
+
+    .metric-card-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .metric-card.passed .metric-card-value {
+      color: var(--success);
+    }
+
+    .metric-card.failed .metric-card-value {
+      color: var(--error);
+    }
+
+    .metric-card.warning .metric-card-value {
+      color: var(--warning);
+    }
+
+    /* ── Comparison Slider ── */
+    .comparison-slider-wrap {
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      cursor: col-resize;
+      user-select: none;
+      animation: scaleIn 0.5s ease-out;
+      background: #000;
+    }
+
+    .comparison-slider-wrap img {
+      display: block;
+      width: 100%;
+      height: auto;
+      pointer-events: none;
+      border-radius: 0;
+    }
+
+    .comparison-slider-after {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .comparison-slider-after img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .comparison-slider-handle {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: white;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
+      cursor: col-resize;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .comparison-slider-handle::before {
+      content: '';
+      width: 36px;
+      height: 36px;
+      background: white;
+      border-radius: 50%;
+      box-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .slider-label-before,
+    .slider-label-after {
+      position: absolute;
+      top: 12px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      z-index: 20;
+    }
+
+    .slider-label-before {
+      left: 12px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #93c5fd;
+      border: 1px solid rgba(147, 197, 253, 0.3);
+    }
+
+    .slider-label-after {
+      right: 12px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #86efac;
+      border: 1px solid rgba(134, 239, 172, 0.3);
+    }
+
+    /* ── Batch URL Input ── */
+    .batch-url-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .batch-url-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      animation: slideInLeft 0.3s ease-out;
+    }
+
+    .batch-url-row input {
+      flex: 1;
+      margin: 0;
+    }
+
+    .btn-remove-url {
+      padding: 7px 10px;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: #f87171;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: var(--transition);
+      min-width: 36px;
+    }
+
+    .btn-remove-url:hover {
+      background: rgba(239, 68, 68, 0.25);
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-add-url {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 16px;
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px dashed rgba(59, 130, 246, 0.3);
+      color: var(--accent);
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: var(--transition);
+      width: 100%;
+      justify-content: center;
+    }
+
+    .btn-add-url:hover {
+      background: rgba(59, 130, 246, 0.14);
+      border-color: var(--accent);
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* ── Result Hero ── */
+    .result-hero {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 20px 24px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      border: 1px solid;
+      animation: scaleIn 0.4s ease-out;
+    }
+
+    .result-hero.passed {
+      background: rgba(16, 185, 129, 0.08);
+      border-color: rgba(16, 185, 129, 0.25);
+    }
+
+    .result-hero.failed {
+      background: rgba(239, 68, 68, 0.07);
+      border-color: rgba(239, 68, 68, 0.25);
+    }
+
+    .result-hero-icon {
+      font-size: 2.5rem;
+    }
+
+    .result-hero-info h2 {
+      margin: 0;
+      font-size: 1.4rem;
+    }
+
+    .result-hero-info p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    /* ── SSIM Ring ── */
+    .ssim-ring-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ssim-ring {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: conic-gradient(var(--accent) var(--pct, 0%), rgba(59, 130, 246, 0.1) 0%);
+      box-shadow: 0 0 20px var(--accent-glow);
+      position: relative;
+      font-size: 0;
+    }
+
+    .ssim-ring::before {
+      content: '';
+      width: 56px;
+      height: 56px;
+      background: var(--bg-card);
+      border-radius: 50%;
+      position: absolute;
+    }
+
+    .ssim-ring-value {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: var(--fg);
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Batch Results Table ── */
+    .batch-results-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+
+    .batch-results-table th,
+    .batch-results-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.88rem;
+    }
+
+    .batch-results-table th {
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+    }
+
+    .batch-results-table tr:hover td {
+      background: rgba(59, 130, 246, 0.04);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-pill.pass {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+    }
+
+    .status-pill.fail {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+    }
+
+    .status-pill.running {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      animation: pulseGlow 2s infinite;
+    }
+
+    /* ── Image Preview Grid ── */
+    .preview-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin: 20px 0;
+    }
+
+    @media (max-width: 768px) {
+      .preview-grid-3 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ── Step Tracker ── */
+    .step-tracker {
+      display: flex;
+      gap: 0;
+      margin: 16px 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .step-item {
+      flex: 1;
+      padding: 10px 8px;
+      text-align: center;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      border-right: 1px solid var(--border);
+      transition: var(--transition);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .step-item:last-child {
+      border-right: none;
+    }
+
+    .step-item.active {
+      background: rgba(59, 130, 246, 0.08);
+      color: var(--accent);
+    }
+
+    .step-item.done {
+      background: rgba(16, 185, 129, 0.08);
+      color: var(--success);
+    }
+
+    .step-item .step-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.5;
+    }
+
+    .step-item.active .step-dot {
+      opacity: 1;
+      animation: pulseGlow 1.5s infinite;
+    }
+
+    .step-item.done .step-dot {
+      opacity: 1;
+    }
+
+    /* Download bar upgrade */
+    .downloads-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+      padding: 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .downloads-bar a,
+    .downloads-bar button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: var(--transition);
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--muted);
+    }
+
+    .downloads-bar a:hover,
+    .downloads-bar button:hover {
+      color: var(--fg);
+      border-color: var(--border-hover);
+      background: rgba(59, 130, 246, 0.08);
+      transform: translateY(-1px);
+      box-shadow: 0 3px 12px rgba(59, 130, 246, 0.12);
+    }
+
+    /* Section heading */
+    .section-heading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 24px 0 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-heading h3 {
+      margin: 0;
+      font-size: 1.05rem;
+      color: var(--fg);
+    }
+
+    .section-heading .count-badge {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    /* ── Diff Type Legend ── */
+    .diff-legend {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 12px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 14px;
+    }
+
+    .diff-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .diff-legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    /* advanced options upgrade */
+    .adv-panel {
+      border: 1px solid var(--border) !important;
+      background: var(--bg-card) !important;
+      border-radius: var(--radius) !important;
+      overflow: hidden;
+    }
+
+    .adv-panel summary {
+      padding: 14px 16px !important;
+      font-size: 0.9rem !important;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .adv-panel .adv-inner {
+      padding: 0 16px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 700px) {
+      .adv-panel .adv-inner {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .adv-section h4 {
+      margin: 0 0 10px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* History table upgrade */
+    .history-url-cell {
+      max-width: 200px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .ssim-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 100px;
+    }
+
+    .ssim-bar {
+      height: 5px;
+      border-radius: 3px;
+      flex: 1;
+      background: rgba(59, 130, 246, 0.1);
+      position: relative;
+    }
+
+    .ssim-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--success));
+    }
+  </style>
 </head>
 
 <body>
@@ -25,8 +702,9 @@
       <a href="/" id="nav-run" class="active">Visual Testing</a>
       <a href="/broken-links">Broken Links</a>
       <a href="/accessibility">Accessibility</a>
-      <a href="/seo-performance">SEO & Performance</a>
+      <a href="/seo-performance">SEO &amp; Performance</a>
       <a href="/semantic">HTML Semantic</a>
+      <a href="/functional">AI Functional</a>
       <span class="nav-divider"></span>
       <button id="nav-jira" class="btn-secondary"
         style="font-size: 13px; padding: 5px 10px; cursor: pointer; border: 1px solid #374151; background: #1f2937; color: #94a3b8; border-radius: 6px;">Jira</button>
@@ -34,353 +712,407 @@
         style="font-size: 13px; padding: 5px 10px; cursor: pointer; border: 1px solid #374151; background: #1f2937; color: #94a3b8; border-radius: 6px;">GitHub</button>
     </nav>
   </header>
+
   <main class="container">
+
+    <!-- ══════════════ RUN VIEW ══════════════ -->
     <div id="view-run">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-        <h1 style="margin: 0;">Visual Testing Studio</h1>
-        <div style="display: flex; align-items: center; gap: 24px;">
-          <button id="btn-push-github" class="btn-primary"
-            style="font-size: 14px; padding: 8px 16px; cursor: pointer; background: #238636; border: 1px solid #2ea043; display: flex; align-items: center; gap: 6px;">
-            <span>🚀</span>
-            <span>Push to GitHub</span>
-          </button>
-          <button id="btn-manage-baselines" class="btn-secondary"
-            style="font-size: 14px; padding: 6px 12px; cursor: pointer;">Manage Baselines</button>
-          <button id="nav-clear" class="btn-reject" style="font-size: 14px; padding: 6px 12px; cursor: pointer;"
-            onclick="window.location.reload()">Clear</button>
-          <a href="#" id="nav-history" style="color: var(--accent); text-decoration: none; font-weight: 500;">History
-            &rarr;</a>
+
+      <!-- Hero -->
+      <div class="vt-hero">
+        <div class="vt-hero-title">
+          <h1>Visual Testing Studio</h1>
+          <p>Pixel-perfect AI comparison — Figma design vs live stage</p>
         </div>
-
+        <div class="vt-hero-actions">
+          <button id="btn-push-github" class="btn-primary"
+            style="font-size:13px;padding:8px 14px;display:flex;align-items:center;gap:6px;background:#238636;border:1px solid #2ea043;">
+            🚀 Push to GitHub
+          </button>
+          <button id="btn-manage-baselines" class="btn-secondary" style="font-size:13px;padding:8px 14px;">
+            🗂 Baselines
+          </button>
+          <a href="#" id="nav-history"
+            style="color:var(--accent);text-decoration:none;font-weight:500;font-size:14px;">History →</a>
+        </div>
       </div>
-      <form id="cmpForm">
-        <label>Stage URL
-          <input type="url" id="url" name="stage_url" placeholder="https://staging.example.com/page" required />
-        </label>
 
-        <div id="figma-upload-section" style="display:none; margin-top: 15px;">
-          <label>Figma PNG (Required for new baseline)</label>
-          <div class="file-upload-wrapper" id="drop-zone">
-            <input type="file" id="figma" name="figma_png" accept="image/png" />
-            <div class="file-upload-content">
-              <span class="file-upload-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-              </span>
-              <div id="file-text" class="file-upload-text">Click or Drop Figma PNG here</div>
+      <!-- Mode Selector Tabs -->
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tab-single" onclick="switchMode('single')">
+          <span class="tab-icon">🔍</span> Single URL
+        </button>
+        <button class="mode-tab" id="tab-batch" onclick="switchMode('batch')">
+          <span class="tab-icon">📋</span> Batch URLs
+        </button>
+        <button class="mode-tab" id="tab-component" onclick="switchMode('component')">
+          <span class="tab-icon">🧩</span> Component Focus
+        </button>
+      </div>
+
+      <!-- ── SINGLE MODE ── -->
+      <form id="cmpForm">
+        <!-- Single URL Panel -->
+        <div id="panel-single">
+          <label>Stage URL
+            <input type="url" id="url" name="stage_url" placeholder="https://staging.example.com/page" required />
+          </label>
+          <div id="figma-upload-section" style="margin-top:12px;">
+            <label>Reference Image (Figma PNG)</label>
+            <div class="file-upload-wrapper" id="drop-zone">
+              <input type="file" id="figma" name="figma_png" accept="image/png" />
+              <div class="file-upload-content">
+                <span class="file-upload-icon">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                </span>
+                <div id="file-text" class="file-upload-text">Click or Drop Figma PNG here</div>
+                <div style="font-size:0.75rem;color:var(--muted);margin-top:4px;">PNG format · Max 20MB</div>
+              </div>
             </div>
           </div>
         </div>
 
+        <!-- Batch URL Panel -->
+        <div id="panel-batch" style="display:none;">
+          <label style="margin-bottom:10px;">Batch Stage URLs</label>
+          <div class="batch-url-list" id="batch-url-list">
+            <div class="batch-url-row">
+              <input type="url" class="batch-url-input" placeholder="https://staging.example.com/page-1" />
+              <button type="button" class="btn-remove-url" onclick="removeBatchRow(this)">✕</button>
+            </div>
+            <div class="batch-url-row">
+              <input type="url" class="batch-url-input" placeholder="https://staging.example.com/page-2" />
+              <button type="button" class="btn-remove-url" onclick="removeBatchRow(this)">✕</button>
+            </div>
+          </div>
+          <button type="button" class="btn-add-url" onclick="addBatchRow()">
+            ＋ Add Another URL
+          </button>
+          <div style="margin-top:14px;">
+            <label>Shared Reference Image (Figma PNG)
+              <div class="file-upload-wrapper" id="drop-zone-batch" style="margin-top:6px;">
+                <input type="file" id="figma-batch" name="figma_png_batch" accept="image/png" />
+                <div class="file-upload-content">
+                  <span class="file-upload-icon">📂</span>
+                  <div id="file-text-batch" class="file-upload-text">Click or Drop shared reference PNG</div>
+                </div>
+              </div>
+            </label>
+          </div>
+          <p style="margin:8px 0 0;font-size:0.8rem;color:var(--muted);">💡 Each URL will run in sequence. Results shown
+            as a summary table.</p>
+        </div>
 
-        <label style="margin-top: 10px; display: block;">Component Selector (Optional)
-          <span style="font-weight: normal; color: #666; font-size: 0.9em;">(Capture only this element, e.g.
-            #header)</span>
-          <input type="text" name="component_selector" id="component_selector" placeholder="#hero, .header-main" />
-        </label>
+        <!-- Component Focus Panel -->
+        <div id="panel-component" style="display:none;">
+          <label>Stage URL
+            <input type="url" id="url-component" name="stage_url_component"
+              placeholder="https://staging.example.com/page" />
+          </label>
+          <label style="margin-top:12px;">CSS Selector (Component/Section to focus)
+            <input type="text" name="component_selector_main" id="component_selector_main"
+              placeholder="#hero-section, .main-nav, .product-card:first-child" />
+          </label>
+          <div style="margin-top:12px;">
+            <label>Component Reference PNG
+              <div class="file-upload-wrapper" id="drop-zone-comp" style="margin-top:6px;">
+                <input type="file" id="figma-comp" name="figma_png_comp" accept="image/png" />
+                <div class="file-upload-content">
+                  <span class="file-upload-icon">🔬</span>
+                  <div id="file-text-comp" class="file-upload-text">Drop component reference PNG</div>
+                </div>
+              </div>
+            </label>
+          </div>
+          <p style="margin:10px 0 0;font-size:0.8rem;color:var(--muted);">🔬 Captures only the specified element — ideal
+            for header/footer/card comparisons.</p>
+        </div>
 
-        <div class="row">
+        <!-- ── Shared Settings Row ── -->
+        <div class="row" style="margin-top:4px;">
           <label>Viewport
             <select name="viewport" id="viewport">
-              <option value="mobile">Mobile (390x844)</option>
-              <option value="1440x900" selected>1440x900</option>
+              <option value="mobile">📱 Mobile (390×844)</option>
+              <option value="1440x900" selected>🖥 Desktop (1440×900)</option>
+              <option value="1280x800">💻 Laptop (1280×800)</option>
+              <option value="768x1024">📟 Tablet (768×1024)</option>
             </select>
           </label>
-
-          <label>Noise Level (Tolerance)
+          <label>Noise Tolerance
             <select name="noise_tolerance" id="noise_tolerance">
-              <option value="strict">Strict (High Sensitivity)</option>
-              <option value="medium" selected>Medium (Standard)</option>
-              <option value="relaxed">Relaxed (Low Sensitivity)</option>
+              <option value="strict">🔍 Strict (High Sensitivity)</option>
+              <option value="medium" selected>⚖️ Medium (Standard)</option>
+              <option value="relaxed">🌊 Relaxed (Low Sensitivity)</option>
             </select>
           </label>
-
-
-
-          <label style="display: none;">Pass Threshold (SSIM)
+          <label style="display:none;">SSIM Threshold
             <input type="number" id="threshold" name="threshold" min="0.5" max="0.99" step="0.01" value="0.85" />
           </label>
         </div>
 
-        <details
-          style="margin-bottom: 20px; border: 1px solid #e0e0e0; padding: 12px; border-radius: 8px; background: #fafafa;">
-          <summary style="cursor: pointer; font-weight: 600; color: #444;">Advanced Options ⚙️</summary>
-          <div style="margin-top: 15px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Ignore Elements (CSS Selectors)
-              <span style="font-weight: normal; color: #666; font-size: 0.9em;">(Hide dynamic content like ads,
-                popups)</span>
-              <textarea name="ignore_selectors" id="ignore_selectors" rows="3"
-                placeholder=".ad-banner, #cookie-consent, .timestamp"
-                style="width: 100%; border: 1px solid #ccc; border-radius: 4px; padding: 8px; margin-top: 5px; font-family: monospace;"></textarea>
-            </label>
+        <!-- ── Advanced Options ── -->
+        <details class="adv-panel">
+          <summary>⚙️ Advanced Options</summary>
+          <div class="adv-inner">
 
-
-            <div style="margin-top: 10px;">
-              <label style="display: block; margin-bottom: 4px; font-weight: 500;">Wait Time (ms)</label>
-              <input type="number" name="wait_time" id="wait_time" value="1000" min="0" step="100"
-                style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 150px;">
-              <span style="color: #666; font-size: 0.9em; margin-left: 10px;">(Wait for animations/loading)</span>
-            </div>
-
-            <!-- Capture Mode & Height Controls -->
-            <div
-              style="margin-top: 15px; padding: 14px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
-              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0369a1;">📐 Capture Size
-                Control</label>
-              <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
-                <div>
-                  <label
-                    style="display: block; font-size: 0.88em; color: #374151; font-weight: 500; margin-bottom: 4px;">Capture
-                    Mode</label>
-                  <select name="capture_mode" id="capture_mode" onchange="toggleCaptureMode(this.value)"
-                    style="padding: 8px 12px; border: 1px solid #93c5fd; border-radius: 6px; background: #fff; font-size: 0.92em; min-width: 180px;">
-                    <option value="fullpage" selected>Full Page (Entire Scroll)</option>
-                    <option value="viewport">Viewport Only (Above the Fold)</option>
-                    <option value="custom_height">Custom Max Height</option>
-                  </select>
-                </div>
-                <div id="max_height_container" style="display: none;">
-                  <label
-                    style="display: block; font-size: 0.88em; color: #374151; font-weight: 500; margin-bottom: 4px;">Max
-                    Height (px)</label>
+            <div class="adv-section">
+              <h4>📐 Capture Control</h4>
+              <label style="margin-bottom:8px;">Capture Mode
+                <select name="capture_mode" id="capture_mode" onchange="toggleCaptureMode(this.value)"
+                  style="margin-top:5px;">
+                  <option value="fullpage" selected>Full Page (Entire Scroll)</option>
+                  <option value="viewport">Viewport Only (Above Fold)</option>
+                  <option value="custom_height">Custom Max Height</option>
+                </select>
+              </label>
+              <div id="max_height_container" style="display:none;margin-top:8px;">
+                <label style="font-size:0.82em;">Max Height (px)
                   <input type="number" name="max_capture_height" id="max_capture_height" value="3000" min="500"
-                    step="100"
-                    style="padding: 8px; border: 1px solid #93c5fd; border-radius: 6px; width: 120px; font-size: 0.92em;">
-                </div>
-              </div>
-
-              <div style="margin-top: 10px;">
-                <label style="display: block; font-size: 0.88em; color: #374151; font-weight: 500; margin-bottom: 4px;">
-                  Remove Sections (CSS Selectors)
-                  <span style="font-weight: normal; color: #666; font-size: 0.92em;">— Removes from DOM to shrink page
-                    height</span>
+                    step="100" style="width:130px;margin-top:4px;">
                 </label>
+              </div>
+              <label style="margin-top:10px;">
+                <span style="font-size:0.82rem;display:block;margin-bottom:5px;">Remove Sections (CSS)</span>
                 <textarea name="remove_selectors" id="remove_selectors" rows="2"
-                  placeholder="footer, .newsletter-section, .related-posts, .sidebar"
-                  style="width: 100%; border: 1px solid #93c5fd; border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.88em; background: #fff;"></textarea>
-              </div>
-
-              <p style="margin: 8px 0 0 0; font-size: 0.78em; color: #6b7280;">
-                💡 <strong>Tip:</strong> Use "Viewport Only" for above-the-fold comparisons. Use "Remove Sections" to
-                exclude footers, banners, etc. and reduce the screenshot height.
-              </p>
+                  placeholder="footer, .newsletter-popup, .cookie-banner"></textarea>
+              </label>
+              <label style="margin-top:10px;">
+                <span style="font-size:0.82rem;display:block;margin-bottom:5px;">Wait Time (ms)</span>
+                <input type="number" name="wait_time" id="wait_time" value="1500" min="0" step="100">
+              </label>
             </div>
 
-            <script>
-              function toggleCaptureMode(mode) {
-                const maxHeightContainer = document.getElementById('max_height_container');
-                if (mode === 'custom_height') {
-                  maxHeightContainer.style.display = 'block';
-                } else {
-                  maxHeightContainer.style.display = 'none';
-                }
-              }
-            </script>
-
-            <div style="margin-top: 15px;">
-              <label style="display: block; margin-bottom: 8px; font-weight: 500;">Validation Types</label>
-              <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" name="check_layout" checked> Layout & Structure
+            <div class="adv-section">
+              <h4>🔬 Validation Types</h4>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;">
+                  <input type="checkbox" name="check_layout" checked> 📐 Layout &amp; Structure
                 </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" name="check_content" checked> Text & Content
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;">
+                  <input type="checkbox" name="check_content" checked> 📝 Text &amp; Content
                 </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="checkbox" name="check_colors" checked> Colors & Styles
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;">
+                  <input type="checkbox" name="check_colors" checked> 🎨 Colors &amp; Styles
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;">
+                  <input type="checkbox" name="highlight_diffs" id="highlight_diffs_cb" checked> 🔴 Highlight
+                  Differences
                 </label>
               </div>
-            </div>
 
-            <div style="margin-top: 15px;">
-              <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-weight: 500;">
+              <h4>🎯 Pixel Sensitivity</h4>
+              <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:500;">
                 <input type="checkbox" id="enable_pixel_threshold" onchange="togglePixelThreshold(this)">
-                Custom Pixel Validation Sensitivity
+                Custom Pixel Threshold
               </label>
               <div id="pixel_threshold_container"
-                style="display: none; margin-top: 10px; padding: 14px; background: #f0f4ff; border: 1px solid #c7d2fe; border-radius: 8px;">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                  <label
-                    style="font-weight: 500; font-size: 0.92em; color: #374151; margin: 0; white-space: nowrap;">Sensitivity
-                    Threshold</label>
-                  <div style="position: relative; display: inline-flex; align-items: center;">
+                style="display:none;padding:12px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.2);border-radius:8px;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                  <div style="position:relative;display:inline-flex;align-items:center;">
                     <input type="number" name="pixel_threshold" id="pixel_threshold" min="0" max="100" value="75"
                       step="1"
-                      style="width: 72px; padding: 7px 28px 7px 10px; border: 1.5px solid #a5b4fc; border-radius: 6px; font-size: 1em; font-family: monospace; font-weight: 600; color: #1e40af; background: #fff; text-align: center; outline: none; transition: border-color 0.2s;"
-                      onfocus="this.style.borderColor='#6366f1'"
-                      onblur="this.style.borderColor='#a5b4fc'; validatePixelThreshold(this);"
+                      style="width:72px;padding:7px 26px 7px 10px;border:1.5px solid #a5b4fc;border-radius:6px;font-size:1em;font-weight:700;color:#818cf8;background:#fff;text-align:center;"
                       oninput="updatePixelIndicator(this.value)">
                     <span
-                      style="position: absolute; right: 10px; font-size: 0.9em; color: #6366f1; font-weight: 600; pointer-events: none;">%</span>
+                      style="position:absolute;right:9px;font-size:0.88em;color:#6366f1;font-weight:700;pointer-events:none;">%</span>
                   </div>
                   <span id="pixel_level_badge"
-                    style="font-size: 0.78em; padding: 3px 10px; border-radius: 12px; font-weight: 600; background: #dbeafe; color: #1d4ed8; white-space: nowrap;">Strict</span>
+                    style="font-size:0.75em;padding:3px 10px;border-radius:12px;font-weight:700;background:#dbeafe;color:#1d4ed8;">Strict</span>
                 </div>
-                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+                <div style="display:flex;gap:5px;flex-wrap:wrap;">
                   <button type="button" onclick="setPixelPreset(25)" class="pixel-preset-btn"
-                    style="padding: 4px 12px; font-size: 0.82em; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #475569; cursor: pointer; transition: all 0.15s;">Loose
+                    style="padding:3px 10px;font-size:0.78em;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#475569;cursor:pointer;">Loose
                     (25%)</button>
                   <button type="button" onclick="setPixelPreset(50)" class="pixel-preset-btn"
-                    style="padding: 4px 12px; font-size: 0.82em; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #475569; cursor: pointer; transition: all 0.15s;">Medium
+                    style="padding:3px 10px;font-size:0.78em;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#475569;cursor:pointer;">Medium
                     (50%)</button>
                   <button type="button" onclick="setPixelPreset(75)" class="pixel-preset-btn"
-                    style="padding: 4px 12px; font-size: 0.82em; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #475569; cursor: pointer; transition: all 0.15s;">Strict
+                    style="padding:3px 10px;font-size:0.78em;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#475569;cursor:pointer;">Strict
                     (75%)</button>
                   <button type="button" onclick="setPixelPreset(95)" class="pixel-preset-btn"
-                    style="padding: 4px 12px; font-size: 0.82em; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #475569; cursor: pointer; transition: all 0.15s;">Pixel-perfect
+                    style="padding:3px 10px;font-size:0.78em;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#475569;cursor:pointer;">Pixel-perfect
                     (95%)</button>
                 </div>
-                <p style="margin: 0; font-size: 0.8em; color: #6b7280;">
-                  <strong>0%</strong> = Most tolerant (ignores minor differences) &nbsp;→&nbsp; <strong>100%</strong> =
-                  Most strict (flags every pixel change)
-                </p>
               </div>
-            </div>
 
-            <script>
-              function togglePixelThreshold(checkbox) {
-                const container = document.getElementById('pixel_threshold_container');
-                if (checkbox.checked) {
-                  container.style.display = 'block';
-                } else {
-                  container.style.display = 'none';
-                }
-              }
-
-              function validatePixelThreshold(input) {
-                let val = parseInt(input.value, 10);
-                if (isNaN(val) || val < 0) val = 0;
-                if (val > 100) val = 100;
-                input.value = val;
-                updatePixelIndicator(val);
-              }
-
-              function setPixelPreset(val) {
-                const input = document.getElementById('pixel_threshold');
-                input.value = val;
-                updatePixelIndicator(val);
-                // Highlight active preset
-                document.querySelectorAll('.pixel-preset-btn').forEach(btn => {
-                  const match = btn.textContent.match(/\((\d+)%\)/);
-                  if (match && parseInt(match[1]) === val) {
-                    btn.style.background = '#6366f1';
-                    btn.style.color = '#fff';
-                    btn.style.borderColor = '#6366f1';
-                  } else {
-                    btn.style.background = '#fff';
-                    btn.style.color = '#475569';
-                    btn.style.borderColor = '#cbd5e1';
-                  }
-                });
-              }
-
-              function updatePixelIndicator(val) {
-                val = parseInt(val, 10);
-                if (isNaN(val)) val = 0;
-                const badge = document.getElementById('pixel_level_badge');
-                if (val <= 20) {
-                  badge.textContent = 'Very Loose';
-                  badge.style.background = '#dcfce7'; badge.style.color = '#166534';
-                } else if (val <= 40) {
-                  badge.textContent = 'Loose';
-                  badge.style.background = '#fef9c3'; badge.style.color = '#854d0e';
-                } else if (val <= 60) {
-                  badge.textContent = 'Medium';
-                  badge.style.background = '#fed7aa'; badge.style.color = '#9a3412';
-                } else if (val <= 80) {
-                  badge.textContent = 'Strict';
-                  badge.style.background = '#dbeafe'; badge.style.color = '#1d4ed8';
-                } else {
-                  badge.textContent = 'Pixel-perfect';
-                  badge.style.background = '#fce7f3'; badge.style.color = '#9d174d';
-                }
-                // Highlight matching preset
-                document.querySelectorAll('.pixel-preset-btn').forEach(btn => {
-                  const match = btn.textContent.match(/\((\d+)%\)/);
-                  if (match && parseInt(match[1]) === val) {
-                    btn.style.background = '#6366f1';
-                    btn.style.color = '#fff';
-                    btn.style.borderColor = '#6366f1';
-                  } else {
-                    btn.style.background = '#fff';
-                    btn.style.color = '#475569';
-                    btn.style.borderColor = '#cbd5e1';
-                  }
-                });
-              }
-
-              // Initialize on load
-              document.addEventListener('DOMContentLoaded', () => updatePixelIndicator(75));
-            </script>
-
-
-            <div style="margin-top: 15px;">
-              <label style="display: flex; align-items: center; cursor: pointer;">
-                <input type="checkbox" name="highlight_diffs" checked style="margin-right: 8px; transform: scale(1.2);">
-                <span style="font-weight: 500;">Highlight Differences</span>
+              <label style="display:flex;align-items:center;gap:8px;margin-top:14px;">Ignore Elements (CSS)
+                <span style="font-size:0.78rem;color:var(--muted);font-weight:400;">(hides dynamic content)</span>
               </label>
-              <span style="display: block; color: #666; font-size: 0.9em; margin-left: 24px;">(Draw red boxes and
-                overlay on differences)</span>
+              <textarea name="ignore_selectors" id="ignore_selectors" rows="2"
+                placeholder=".ad-banner, #cookie-consent, .live-chat"></textarea>
             </div>
+
           </div>
         </details>
 
-        <button type="submit">Compare</button>
+        <button type="submit" id="btn-compare" style="margin-top:4px;">
+          🔍 Run Visual Comparison
+        </button>
       </form>
 
+      <!-- ── Loader ── -->
       <div id="loader" class="loader-container hidden">
+        <!-- Step Tracker -->
+        <div class="step-tracker" id="step-tracker">
+          <div class="step-item" id="step-screenshot">
+            <div class="step-dot"></div>Screenshot
+          </div>
+          <div class="step-item" id="step-align">
+            <div class="step-dot"></div>Align
+          </div>
+          <div class="step-item" id="step-compare">
+            <div class="step-dot"></div>Compare
+          </div>
+          <div class="step-item" id="step-classify">
+            <div class="step-dot"></div>Classify
+          </div>
+          <div class="step-item" id="step-report">
+            <div class="step-dot"></div>Report
+          </div>
+        </div>
         <div class="progress-bar-bg">
           <div id="progressFill" class="progress-bar-fill"></div>
         </div>
         <div id="statusText" class="status-text">0% - Starting...</div>
       </div>
 
+      <!-- ── Result Section ── -->
       <section id="result" class="hidden">
-        <h2>Result</h2>
-        <div id="metrics"></div>
-        <div id="actions" class="actions hidden">
-          <button id="btnApprove" class="btn-approve">Approve & Save</button>
-          <button id="btnReject" class="btn-reject">Reject</button>
-        </div>
-        <div class="downloads">
-          <a id="dl_overlay" href="#" download>Download Diff Overlay (PNG)</a>
-          <a id="dl_heatmap" href="#" download>Download Diff Heatmap (PNG)</a>
-          <a id="dl_aligned" href="#" download>Download Aligned Stage (PNG)</a>
-          <a id="dl_report" href="#" download>Download Report (PDF)</a>
-        </div>
-        <div id="previews" class="grid"></div>
-      </section>
-    </div>
 
+        <!-- Result Hero Banner -->
+        <div id="result-hero" class="result-hero failed">
+          <div class="result-hero-icon">❌</div>
+          <div class="result-hero-info">
+            <h2 id="result-hero-title">Visual Differences Detected</h2>
+            <p id="result-hero-sub">Review and classify each difference below.</p>
+          </div>
+        </div>
+
+        <!-- Metrics Dashboard -->
+        <div class="metrics-dashboard" id="metrics-dashboard">
+          <div class="metric-card" id="mc-ssim">
+            <div class="metric-card-label">SSIM Score</div>
+            <div class="metric-card-value" id="mc-ssim-val">–</div>
+            <div class="metric-card-sub">Structural Similarity Index</div>
+          </div>
+          <div class="metric-card" id="mc-diff">
+            <div class="metric-card-label">Changed Area</div>
+            <div class="metric-card-value" id="mc-diff-val">–</div>
+            <div class="metric-card-sub">% of total pixels affected</div>
+          </div>
+          <div class="metric-card" id="mc-regions">
+            <div class="metric-card-label">Diff Regions</div>
+            <div class="metric-card-value" id="mc-regions-val">–</div>
+            <div class="metric-card-sub">Distinct issue clusters</div>
+          </div>
+          <div class="metric-card" id="mc-status">
+            <div class="metric-card-label">Test Status</div>
+            <div class="metric-card-value" id="mc-status-val">–</div>
+            <div class="metric-card-sub" id="mc-status-sub">SSIM threshold check</div>
+          </div>
+        </div>
+
+        <!-- Action Bar -->
+        <div id="actions" class="hidden" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+          <button id="btnApprove" class="btn-approve">✅ Approve &amp; Save Baseline</button>
+          <button id="btnReject" class="btn-reject">❌ Reject</button>
+        </div>
+
+        <!-- Downloads Bar -->
+        <div class="downloads-bar">
+          <a id="dl_overlay" href="#" download>📥 Diff Overlay</a>
+          <a id="dl_heatmap" href="#" download>🌡 Heatmap</a>
+          <a id="dl_aligned" href="#" download>🖼 Aligned Stage</a>
+          <a id="dl_report" href="#" download>📊 PDF Report</a>
+          <button id="btn-open-slider" onclick="openComparisonSlider()"
+            style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#a78bfa;padding:8px 14px;font-size:0.82rem;cursor:pointer;">
+            ↔ Side-by-Side Slider
+          </button>
+        </div>
+
+        <!-- Comparison Slider Modal -->
+        <div id="slider-modal" class="modal hidden">
+          <div class="modal-content" style="max-width:900px;width:95%;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 style="margin:0;">↔ Comparison Slider — Reference vs Stage</h3>
+              <button onclick="document.getElementById('slider-modal').classList.add('hidden')" class="btn-secondary">✕
+                Close</button>
+            </div>
+            <div class="comparison-slider-wrap" id="comparison-slider-wrap">
+              <img id="slider-img-before" src="" alt="Reference" />
+              <div class="comparison-slider-after" id="slider-after">
+                <img id="slider-img-after" src="" alt="Stage" />
+              </div>
+              <div class="comparison-slider-handle" id="slider-handle"></div>
+              <span class="slider-label-before">REFERENCE</span>
+              <span class="slider-label-after">STAGE</span>
+            </div>
+            <p style="margin:10px 0 0;font-size:0.8rem;color:var(--muted);text-align:center;">Drag the handle left/right
+              to compare Reference vs Stage</p>
+          </div>
+        </div>
+
+        <!-- Preview Images -->
+        <div class="preview-grid-3" id="previews"></div>
+
+        <!-- Issues Section -->
+        <div id="issues-section"></div>
+
+      </section>
+
+      <!-- ── Batch Results ── -->
+      <section id="batch-result" class="hidden">
+        <h2 style="margin-top:24px;">Batch Results</h2>
+        <div id="batch-summary" class="metrics-dashboard" style="grid-template-columns:repeat(3,1fr);"></div>
+        <div style="overflow-x:auto;margin-top:16px;">
+          <table class="batch-results-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>URL</th>
+                <th>SSIM</th>
+                <th>Changed</th>
+                <th>Issues</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="batch-results-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div><!-- /#view-run -->
+
+    <!-- ══════════════ HISTORY VIEW ══════════════ -->
     <div id="view-history" class="hidden">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-        <h1 style="margin: 0;">Test History</h1>
-        <div style="display: flex; align-items: center; gap: 16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <h1 style="margin:0;">Test History</h1>
+        <div style="display:flex;align-items:center;gap:16px;">
           <div id="history-actions"></div>
-          <a href="#" id="history-back" style="color: var(--accent); text-decoration: none; font-weight: 500;">&larr;
-            Back</a>
+          <a href="#" id="history-back" style="color:var(--accent);text-decoration:none;font-weight:500;">← Back</a>
         </div>
       </div>
 
       <div class="filters">
         <button class="filter-btn active" onclick="filterHistory('all', this)">All</button>
         <button class="filter-btn" onclick="filterHistory('pending', this)">Pending Review</button>
-        <button class="filter-btn" onclick="filterHistory('start', this)">Approved</button>
-        <!-- Using 'start' as lazy way or custom -->
+        <button class="filter-btn" onclick="filterHistory('approved', this)">Approved</button>
         <button class="filter-btn" onclick="filterHistory('rejected', this)">Rejected</button>
       </div>
 
       <table>
-
         <thead>
           <tr>
             <th width="40"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"></th>
             <th>Date</th>
             <th>ID</th>
+            <th>URL</th>
             <th>Status</th>
             <th>Review</th>
             <th>SSIM</th>
@@ -389,28 +1121,27 @@
         </thead>
         <tbody id="history-list"></tbody>
       </table>
-      <div id="pagination"
-        style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;"></div>
+      <div id="pagination" style="display:flex;justify-content:space-between;align-items:center;margin-top:15px;"></div>
     </div>
 
+    <!-- ══════════════ BASELINES VIEW ══════════════ -->
     <div id="view-baselines" class="hidden">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-        <h1 style="margin: 0;">Baseline Management</h1>
-        <a href="#" id="baselines-back" style="color: var(--accent); text-decoration: none; font-weight: 500;">&larr;
-          Back</a>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <h1 style="margin:0;">Baseline Management</h1>
+        <a href="#" id="baselines-back" style="color:var(--accent);text-decoration:none;font-weight:500;">← Back</a>
       </div>
       <div id="baselines-list" class="grid-baselines"></div>
     </div>
 
-    <!-- Baseline History Modal -->
+    <!-- ── Baseline History Modal ── -->
     <div id="baseline-history-modal" class="modal hidden">
-      <div class="modal-content" style="max-width: 800px; width: 90%;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="modal-content" style="max-width:800px;width:90%;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
           <h3 id="bl-modal-title">History for ...</h3>
           <button onclick="document.getElementById('baseline-history-modal').classList.add('hidden')"
             class="btn-secondary">Close</button>
         </div>
-        <table style="width:100%; margin-top:15px;">
+        <table style="width:100%;margin-top:15px;">
           <thead>
             <tr>
               <th>Version</th>
@@ -424,10 +1155,9 @@
       </div>
     </div>
 
-
     <div id="toast" class="toast hidden"></div>
 
-    <!-- Modals -->
+    <!-- Jira Modals -->
     <div id="jira-config-modal" class="modal hidden">
       <div class="modal-content">
         <h3>Jira Configuration</h3>
@@ -436,13 +1166,12 @@
         <label>API Token <input type="password" id="jira-token" placeholder="API Token"></label>
         <label>Project Key <input type="text" id="jira-project" placeholder="PROJ"></label>
         <div class="modal-actions">
-          <button id="btnSaveJira">Save & Test</button>
+          <button id="btnSaveJira">Save &amp; Test</button>
           <button onclick="document.getElementById('jira-config-modal').classList.add('hidden')"
             class="btn-secondary">Cancel</button>
         </div>
       </div>
     </div>
-
     <div id="jira-report-modal" class="modal hidden">
       <div class="modal-content">
         <h3>Report to Jira</h3>
@@ -464,13 +1193,12 @@
         <label>Repo Owner <input type="text" id="gh-owner" placeholder="octocat"></label>
         <label>Repo Name <input type="text" id="gh-repo" placeholder="hello-world"></label>
         <div class="modal-actions">
-          <button id="btnSaveGitHub">Save & Test</button>
+          <button id="btnSaveGitHub">Save &amp; Test</button>
           <button onclick="document.getElementById('github-config-modal').classList.add('hidden')"
             class="btn-secondary">Cancel</button>
         </div>
       </div>
     </div>
-
     <div id="github-report-modal" class="modal hidden">
       <div class="modal-content">
         <h3>Report to GitHub</h3>
@@ -489,38 +1217,21 @@
       <div class="modal-content">
         <h3>🚀 Push to GitHub</h3>
         <div id="git-status-info"
-          style="margin-bottom: 15px; padding: 12px; background: #1e293b; border-radius: 6px; font-size: 13px; color: #e2e8f0; border: 1px solid #334155;">
-          <div style="margin-bottom: 6px;"><strong style="color: #94a3b8;">Branch:</strong> <span
-              id="git-current-branch" style="color: #10b981; font-weight: 600;">...</span></div>
-          <div style="margin-bottom: 6px;"><strong style="color: #94a3b8;">Changes:</strong> <span
-              id="git-changes-count" style="color: #f59e0b; font-weight: 600;">...</span></div>
-          <div><strong style="color: #94a3b8;">Last Commit:</strong> <span id="git-last-commit"
-              style="color: #e2e8f0;">...</span></div>
+          style="margin-bottom:15px;padding:12px;background:#1e293b;border-radius:6px;font-size:13px;color:#e2e8f0;border:1px solid #334155;">
+          <div style="margin-bottom:6px;"><strong style="color:#94a3b8;">Branch:</strong> <span id="git-current-branch"
+              style="color:#10b981;font-weight:600;">...</span></div>
+          <div style="margin-bottom:6px;"><strong style="color:#94a3b8;">Changes:</strong> <span id="git-changes-count"
+              style="color:#f59e0b;font-weight:600;">...</span></div>
+          <div><strong style="color:#94a3b8;">Last Commit:</strong> <span id="git-last-commit"
+              style="color:#e2e8f0;">...</span></div>
         </div>
-        <label>Commit Message
-          <input type="text" id="git-commit-message" placeholder="🎨 Update from Visual Testing Tool"
-            value="🎨 Update baselines and tests">
-        </label>
-        <label>Branch
-          <input type="text" id="git-branch" placeholder="main" value="main">
-        </label>
-        <div
-          style="margin: 15px 0; padding: 10px; background: #eff6ff; border-left: 3px solid #3b82f6; border-radius: 4px;">
-          <p style="margin: 0; font-size: 13px; color: #1e40af;">
-            ℹ️ This will automatically:
-          </p>
-          <ul style="margin: 8px 0 0 20px; font-size: 13px; color: #1e40af;">
-            <li>Stage all changes (git add .)</li>
-            <li>Commit with your message</li>
-            <li>Push to GitHub</li>
-            <li>Trigger automated visual tests</li>
-          </ul>
-        </div>
-        <div id="git-push-progress" class="hidden" style="margin: 15px 0;">
+        <label>Commit Message <input type="text" id="git-commit-message" value="🎨 Update baselines and tests"></label>
+        <label>Branch <input type="text" id="git-branch" value="main"></label>
+        <div id="git-push-progress" class="hidden" style="margin:15px 0;">
           <div class="progress-bar-bg">
-            <div id="git-push-progress-fill" class="progress-bar-fill" style="width: 0%"></div>
+            <div id="git-push-progress-fill" class="progress-bar-fill" style="width:0%"></div>
           </div>
-          <div id="git-push-status" style="margin-top: 8px; font-size: 13px; color: #666;"></div>
+          <div id="git-push-status" style="margin-top:8px;font-size:13px;color:#666;"></div>
         </div>
         <div class="modal-actions">
           <button id="btnExecutePush">Push Changes</button>
@@ -529,6 +1240,7 @@
         </div>
       </div>
     </div>
+
   </main>
 
   <footer class="patent-footer">
@@ -536,11 +1248,110 @@
       <span>© 2026 QA Testing Framework — All Rights Reserved</span>
     </div>
     <div class="patent-footer-right">
-      Intelligent Web QA System v2.0 | Computer-Vision-Based Visual Regression Analysis
+      Intelligent Web QA System v3.0 | Computer-Vision Visual Regression Analysis
     </div>
   </footer>
 
-  <script src="/static/app.js?v=5"></script>
+  <script>
+    // ── Mode Switcher ──
+    let currentMode = 'single';
+    function switchMode(mode) {
+      currentMode = mode;
+      document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('tab-' + mode).classList.add('active');
+      document.getElementById('panel-single').style.display = mode === 'single' ? '' : 'none';
+      document.getElementById('panel-batch').style.display = mode === 'batch' ? '' : 'none';
+      document.getElementById('panel-component').style.display = mode === 'component' ? '' : 'none';
+      // Update submit label
+      const labels = { single: '🔍 Run Visual Comparison', batch: '🚀 Run Batch Comparison', component: '🔬 Compare Component' };
+      document.getElementById('btn-compare').textContent = labels[mode];
+    }
+
+    // ── Batch URL helpers ──
+    function addBatchRow() {
+      const list = document.getElementById('batch-url-list');
+      const row = document.createElement('div');
+      row.className = 'batch-url-row';
+      row.innerHTML = `<input type="url" class="batch-url-input" placeholder="https://staging.example.com/page" />
+        <button type="button" class="btn-remove-url" onclick="removeBatchRow(this)">✕</button>`;
+      list.appendChild(row);
+    }
+    function removeBatchRow(btn) {
+      const rows = document.querySelectorAll('.batch-url-row');
+      if (rows.length <= 1) return;
+      btn.parentElement.remove();
+    }
+
+    // ── Advanced helpers ──
+    function toggleCaptureMode(mode) {
+      document.getElementById('max_height_container').style.display = mode === 'custom_height' ? 'block' : 'none';
+    }
+    function togglePixelThreshold(cb) {
+      document.getElementById('pixel_threshold_container').style.display = cb.checked ? 'block' : 'none';
+    }
+    function setPixelPreset(val) {
+      document.getElementById('pixel_threshold').value = val;
+      updatePixelIndicator(val);
+      document.querySelectorAll('.pixel-preset-btn').forEach(b => {
+        const m = b.textContent.match(/\((\d+)%\)/);
+        const isMatch = m && parseInt(m[1]) === val;
+        b.style.background = isMatch ? '#6366f1' : '#fff';
+        b.style.color = isMatch ? '#fff' : '#475569';
+        b.style.borderColor = isMatch ? '#6366f1' : '#cbd5e1';
+      });
+    }
+    function updatePixelIndicator(val) {
+      val = parseInt(val, 10) || 0;
+      const badge = document.getElementById('pixel_level_badge');
+      const levels = [
+        [20, 'Very Loose', '#dcfce7', '#166534'],
+        [40, 'Loose', '#fef9c3', '#854d0e'],
+        [60, 'Medium', '#fed7aa', '#9a3412'],
+        [80, 'Strict', '#dbeafe', '#1d4ed8'],
+        [100, 'Pixel-perfect', '#fce7f3', '#9d174d']
+      ];
+      for (const [max, label, bg, color] of levels) {
+        if (val <= max) { badge.textContent = label; badge.style.background = bg; badge.style.color = color; break; }
+      }
+    }
+    document.addEventListener('DOMContentLoaded', () => updatePixelIndicator(75));
+
+    // ── Comparison Slider ──
+    let sliderDragging = false;
+    function openComparisonSlider() {
+      const modal = document.getElementById('slider-modal');
+      modal.classList.remove('hidden');
+      initSlider();
+    }
+    function initSlider() {
+      const wrap = document.getElementById('comparison-slider-wrap');
+      const handle = document.getElementById('slider-handle');
+      const after = document.getElementById('slider-after');
+      let pct = 50;
+      function setPos(x) {
+        const rect = wrap.getBoundingClientRect();
+        pct = Math.max(0, Math.min(100, ((x - rect.left) / rect.width) * 100));
+        handle.style.left = pct + '%';
+        after.style.clipPath = `inset(0 0 0 ${pct}%)`;
+        after.querySelector('img').style.transform = `translateX(-${pct}%)`;
+        after.querySelector('img').style.width = `${100 / (1 - pct / 100)}%`;
+      }
+      // Reset to 50%
+      handle.style.left = '50%';
+      after.style.clipPath = 'inset(0 0 0 50%)';
+      after.querySelector('img').style.transform = 'translateX(-50%)';
+      after.querySelector('img').style.width = '200%';
+
+      wrap.addEventListener('mousedown', e => { sliderDragging = true; setPos(e.clientX); });
+      wrap.addEventListener('touchstart', e => { sliderDragging = true; setPos(e.touches[0].clientX); }, { passive: true });
+      document.addEventListener('mousemove', e => { if (sliderDragging) setPos(e.clientX); });
+      document.addEventListener('touchmove', e => { if (sliderDragging) setPos(e.touches[0].clientX); }, { passive: true });
+      document.addEventListener('mouseup', () => sliderDragging = false);
+      document.addEventListener('touchend', () => sliderDragging = false);
+    }
+  </script>
+
+  <script src="/static/app.js?v=6"></script>
   <script src="/static/jira_integration.js"></script>
   <script src="/static/github_integration.js"></script>
   <script src="/static/git_push.js"></script>

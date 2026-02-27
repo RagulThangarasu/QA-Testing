@@ -3,3 +3,11 @@ __pycache__/
 *.pyc
 Testing framework/github_config.json
 Testing framework/jira_config.json
+Testing framework/runs/
+Testing framework/runs.json
+Testing framework/multi_test_results/
+Testing framework/visual_test_results/
+Testing framework/design_baselines/
+Testing framework/notes.txt
+*.pdf
+broken_links_report.txt

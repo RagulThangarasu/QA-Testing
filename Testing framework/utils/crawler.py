@@ -1,4 +1,3 @@
-
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
@@ -9,14 +8,33 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+class StatusCache:
+    """Shared cache to avoid re-checking same URL multiple times"""
+    def __init__(self):
+        self.cache = {}
+
+    def get(self, url):
+        return self.cache.get(url)
+
+    def set(self, url, status):
+        self.cache[url] = status
+
+    def clear(self):
+        self.cache.clear()
+
+global_status_cache = StatusCache()
+
 class ImageIconCrawler:
-    def __init__(self, start_url, max_pages=50, max_depth=3):
+    def __init__(self, start_url, max_pages=1000000, max_depth=1000):
         self.start_url = start_url
         self.domain = urlparse(start_url).netloc
         self.visited_pages = set()
         self.broken_assets = []
+        self.special_interest_found = [] # For /archived/ tracking
+        self.reported_urls = set() # For "links should not reapt"
         self.max_pages = max_pages
         self.max_depth = max_depth
+        self.status_cache = global_status_cache
         
         # Create session with connection pooling and retries
         self.session = requests.Session()
@@ -56,20 +74,40 @@ class ImageIconCrawler:
             return 0
 
     def check_assets_batch(self, assets_batch):
-        """Check multiple assets concurrently"""
-        results = []
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            # items: (asset_type, full_url, element, page_url)
-            future_to_asset = {executor.submit(self.check_asset, asset[1], asset[3]): asset for asset in assets_batch}
-            for future in as_completed(future_to_asset):
-                asset_type, full_url, element, page_url = future_to_asset[future]
-                try:
-                    status = future.result()
-                    if status >= 400 or status == 0:
-                        results.append((asset_type, full_url, element, page_url, status))
-                except Exception:
-                    pass
-        return results
+        """Check multiple assets concurrently while preserving order"""
+        results = [None] * len(assets_batch)
+        
+        # Use cache for already checked URLs
+        to_check_indices = []
+        for i, asset in enumerate(assets_batch):
+            url = asset[1]
+            cached_status = self.status_cache.get(url)
+            if cached_status is not None:
+                results[i] = cached_status
+            else:
+                to_check_indices.append(i)
+        
+        if to_check_indices:
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                future_to_idx = {executor.submit(self.check_asset, assets_batch[idx][1], assets_batch[idx][3]): idx 
+                                 for idx in to_check_indices}
+                for future in as_completed(future_to_idx):
+                    idx = future_to_idx[future]
+                    try:
+                        status = future.result()
+                        results[idx] = status
+                        self.status_cache.set(assets_batch[idx][1], status)
+                    except Exception:
+                        results[idx] = 0
+                        self.status_cache.set(assets_batch[idx][1], 0)
+        
+        # Map findings back to broken items
+        findings = []
+        for i, status in enumerate(results):
+            if status >= 400 or status == 0:
+                asset_type, full_url, element, page_url = assets_batch[i]
+                findings.append((asset_type, full_url, element, page_url, status))
+        return findings
 
     def crawl(self, url, depth=0):
         if url in self.visited_pages or not self.is_internal(url) or depth > self.max_depth or len(self.visited_pages) >= self.max_pages:
@@ -147,11 +185,26 @@ class ImageIconCrawler:
                     full_url = urljoin(url, href.strip())
                     assets_to_check.append(('SVG Image', full_url, svg_img, url))
 
+            # Track special interest URLs (Archived) regardless of status
+            for asset_type, full_url, element, page_url in assets_to_check:
+                if '/archived/' in full_url.lower() or '/archieved/' in full_url.lower():
+                    self.special_interest_found.append({
+                        'Found On Page': page_url,
+                        'Target URL': full_url,
+                        'URL Type': f"Asset ({asset_type})",
+                        'Context': str(element)[:150]
+                    })
+
 
             # Check assets in batch
             broken_results = self.check_assets_batch(assets_to_check)
             
             for asset_type, full_url, element, page_url, status in broken_results:
+                # Deduplicate based on "links should not reapt"
+                if full_url in self.reported_urls:
+                    continue
+                self.reported_urls.add(full_url)
+                
                 parent = element.find_parent()
                 section_info = "Unknown"
                 while parent and parent.name != 'body':
@@ -164,7 +217,7 @@ class ImageIconCrawler:
                     parent = parent.find_parent()
 
                 self.broken_assets.append({
-                    'Page URL': page_url,
+                    'First Found On Page': page_url,
                     'Asset Type': asset_type,
                     'Asset URL': full_url,
                     'Status Code': status,
@@ -199,17 +252,20 @@ class ImageIconCrawler:
                     if link not in self.visited_pages:
                         queue.append((link, depth + 1))
         
-        return self.broken_assets
+        return self.broken_assets, self.special_interest_found
 
 class LinkCrawler:
-    def __init__(self, start_url, max_pages=50, max_depth=3):
+    def __init__(self, start_url, max_pages=1000000, max_depth=1000):
         self.start_url = start_url
         self.domain = urlparse(start_url).netloc
         self.visited_pages = set()
-        self.checked_links = set()
+        self.checked_links = set() # Links checked against server
+        self.special_interest_found = [] # For /archived/ tracking
+        self.reported_urls = set() # For unique reporting
         self.broken_links = []
         self.max_pages = max_pages
         self.max_depth = max_depth
+        self.status_cache = global_status_cache
         
         # Create session with connection pooling
         self.session = requests.Session()
@@ -247,20 +303,39 @@ class LinkCrawler:
             return 0
 
     def check_links_batch(self, links_batch):
-        """Check multiple links concurrently"""
-        results = []
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            # link_data: (full_url, link_elem, page_url)
-            future_to_link = {executor.submit(self.check_link, link_data[0], link_data[2]): link_data for link_data in links_batch}
-            for future in as_completed(future_to_link):
-                full_url, link_elem, page_url = future_to_link[future]
-                try:
-                    status = future.result()
-                    if status >= 400 or status == 0:
-                        results.append((full_url, link_elem, page_url, status))
-                except Exception:
-                    pass
-        return results
+        """Check multiple links concurrently while preserving discovery order"""
+        results = [None] * len(links_batch)
+        
+        # Use cache for already checked URLs
+        to_check_indices = []
+        for i, link_data in enumerate(links_batch):
+            url = link_data[0]
+            cached_status = self.status_cache.get(url)
+            if cached_status is not None:
+                results[i] = cached_status
+            else:
+                to_check_indices.append(i)
+                
+        if to_check_indices:
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                future_to_idx = {executor.submit(self.check_link, links_batch[idx][0], links_batch[idx][2]): idx 
+                                 for idx in to_check_indices}
+                for future in as_completed(future_to_idx):
+                    idx = future_to_idx[future]
+                    try:
+                        status = future.result()
+                        results[idx] = status
+                        self.status_cache.set(links_batch[idx][0], status)
+                    except Exception:
+                        results[idx] = 0
+                        self.status_cache.set(links_batch[idx][0], 0)
+        
+        findings = []
+        for i, status in enumerate(results):
+            if status >= 400 or status == 0:
+                full_url, link_elem, page_url = links_batch[i]
+                findings.append((full_url, link_elem, page_url, status))
+        return findings
 
     def crawl(self, url, depth=0):
         if url in self.visited_pages or not self.is_internal(url) or depth > self.max_depth or len(self.visited_pages) >= self.max_pages:
@@ -313,11 +388,25 @@ class LinkCrawler:
                     skip_ext = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.zip', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.css', '.js', '.xml', '.json', '.txt']
                     if not any(path.endswith(ext) for ext in skip_ext):
                         links_to_crawl.append(full_url)
+                
+                # Track special interest URLs (Archived)
+                if '/archived/' in full_url.lower() or '/archieved/' in full_url.lower():
+                    self.special_interest_found.append({
+                        'Found On Page': url,
+                        'Target URL': full_url,
+                        'Link Text/Label': link.get_text(strip=True),
+                        'URL Type': 'Link (a tag)'
+                    })
 
             # Check links in batch
             broken_results = self.check_links_batch(links_to_check)
             
             for full_url, link_elem, page_url, status in broken_results:
+                # Deduplicate based on "links should not reapt"
+                if full_url in self.reported_urls:
+                    continue
+                self.reported_urls.add(full_url)
+                
                 parent = link_elem.find_parent()
                 section_info = "Unknown"
                 while parent and parent.name != 'body':
@@ -334,7 +423,7 @@ class LinkCrawler:
                 
                 if status >= 400 or status == 0:
                     self.broken_links.append({
-                        'Page URL': page_url,
+                        'First Found On Page': page_url,
                         'Link Type': link_type,
                         'Link URL': full_url,
                         'Link Text': link_elem.get_text(strip=True)[:100],
@@ -360,13 +449,23 @@ class LinkCrawler:
                     if link not in self.visited_pages:
                         queue.append((link, depth + 1))
         
-        return self.broken_links
+        return self.broken_links, self.special_interest_found
 
-def generate_excel_report(broken_assets, job_id, output_dir):
-    if not broken_assets:
+def generate_excel_report(broken_assets, special_interest, job_id, output_dir):
+    if not broken_assets and not special_interest:
         return None
     
-    df = pd.DataFrame(broken_assets)
-    output_path = os.path.join(output_dir, f"broken_assets_report_{job_id}.xlsx")
-    df.to_excel(output_path, index=False)
+    output_path = os.path.join(output_dir, f"comprehensive_crawl_report_{job_id}.xlsx")
+    
+    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+        if broken_assets:
+            df_broken = pd.DataFrame(broken_assets)
+            df_broken.to_excel(writer, index=False, sheet_name='Broken Items')
+        
+        if special_interest:
+            df_special = pd.DataFrame(special_interest)
+            # Remove exact duplicates from special interest
+            df_special = df_special.drop_duplicates()
+            df_special.to_excel(writer, index=False, sheet_name='Archived Link Discovery')
+            
     return output_path

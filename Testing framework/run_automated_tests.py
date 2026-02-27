@@ -5,7 +5,14 @@ Runs visual tests and reports results for CI/CD integration
 """
 import sys
 import os
+import signal
 import json
+
+# Ignore Broken Pipe signal on Unix-like systems
+try:
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+except Exception:
+    pass
 import argparse
 from datetime import datetime
 from playwright.sync_api import sync_playwright

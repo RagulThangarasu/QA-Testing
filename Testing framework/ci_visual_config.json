@@ -1,0 +1,54 @@
+{
+  "threshold": {
+    "ssim_min": 0.85,
+    "change_ratio_max": 0.05,
+    "fail_on_any": true
+  },
+  "noise_tolerance": "medium",
+  "viewport": "1440x900",
+  "fullpage": true,
+  "wait_time_ms": 2000,
+  "check_layout": true,
+  "check_content": true,
+  "check_colors": true,
+  "ignore_selectors": [
+    ".cookie-banner",
+    ".live-chat-widget",
+    "#onetrust-banner",
+    "[data-notest]"
+  ],
+  "remove_selectors": [],
+  "urls_to_test": [
+    {
+      "name": "Homepage",
+      "path": "/",
+      "baseline": "homepage",
+      "enabled": true,
+      "viewport": "1440x900"
+    },
+    {
+      "name": "Homepage Mobile",
+      "path": "/",
+      "baseline": "homepage_mobile",
+      "enabled": true,
+      "viewport": "mobile"
+    },
+    {
+      "name": "Login Page",
+      "path": "/login",
+      "baseline": "login",
+      "enabled": false
+    },
+    {
+      "name": "Product Listing",
+      "path": "/products",
+      "baseline": "products",
+      "enabled": false
+    }
+  ],
+  "notification": {
+    "github_status_check": true,
+    "github_pr_comment": true,
+    "fail_build_on_threshold": true
+  }
+}
