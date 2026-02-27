@@ -198,10 +198,21 @@ form.addEventListener("submit", async e => {
 
 // ── Batch Mode ──
 async function runBatchMode() {
-  const urls = Array.from(document.querySelectorAll('.batch-url-input')).map(i => i.value.trim()).filter(Boolean);
-  if (urls.length === 0) { showToast("Add at least one URL in batch mode.", true); return; }
+  const rows = document.querySelectorAll('.batch-url-row');
+  const batchJobs = [];
 
-  const batchFile = document.getElementById('figma-batch').files[0];
+  rows.forEach(row => {
+    const urlInput = row.querySelector('.batch-url-input');
+    const fileInput = row.querySelector('.batch-file-input');
+    if (urlInput && urlInput.value.trim()) {
+      batchJobs.push({
+        url: urlInput.value.trim(),
+        file: fileInput ? fileInput.files[0] : null
+      });
+    }
+  });
+
+  if (batchJobs.length === 0) { showToast("Add at least one URL in batch mode.", true); return; }
 
   document.getElementById("batch-result").classList.remove("hidden");
   document.getElementById("batch-results-body").innerHTML =
@@ -210,11 +221,17 @@ async function runBatchMode() {
   const results = [];
   let passed = 0, failed = 0;
 
-  for (let i = 0; i < urls.length; i++) {
-    const url = urls[i];
+  for (let i = 0; i < batchJobs.length; i++) {
+    const { url, file } = batchJobs[i];
     const fd = new FormData(form);
+
+    // Ensure we don't accidentally pass a shared Figma PNG
+    fd.delete("figma_png");
+
     fd.set("stage_url", url);
-    if (batchFile) fd.set("figma_png", batchFile);
+    if (file) {
+      fd.set("figma_png", file);
+    }
 
     try {
       const startRes = await fetch("/api/compare", { method: "POST", body: fd });
@@ -235,7 +252,7 @@ async function runBatchMode() {
       results.push({ url, status: 'failed', error: err.message });
       failed++;
     }
-    renderBatchTable(results, urls.length, passed, failed);
+    renderBatchTable(results, batchJobs.length, passed, failed);
   }
   showToast(`Batch done: ${passed} passed, ${failed} failed.`);
 }

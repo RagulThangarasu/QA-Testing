@@ -779,33 +779,29 @@
 
         <!-- Batch URL Panel -->
         <div id="panel-batch" style="display:none;">
-          <label style="margin-bottom:10px;">Batch Stage URLs</label>
+          <label style="margin-bottom:10px;">Batch Stage URLs &amp; Local Reference Designs</label>
           <div class="batch-url-list" id="batch-url-list">
-            <div class="batch-url-row">
-              <input type="url" class="batch-url-input" placeholder="https://staging.example.com/page-1" />
-              <button type="button" class="btn-remove-url" onclick="removeBatchRow(this)">✕</button>
-            </div>
-            <div class="batch-url-row">
-              <input type="url" class="batch-url-input" placeholder="https://staging.example.com/page-2" />
-              <button type="button" class="btn-remove-url" onclick="removeBatchRow(this)">✕</button>
+            <div class="batch-url-row" style="align-items:flex-start;">
+              <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+                <input type="url" class="batch-url-input"
+                  placeholder="Stage URL (e.g. https://staging.example.com/page-1)" />
+                <div
+                  style="display:flex;align-items:center;padding:6px 10px;border:1px dashed var(--border);border-radius:6px;gap:8px;">
+                  <span style="font-size:0.75rem;color:var(--muted);white-space:nowrap;">Reference (Optional)</span>
+                  <input type="file" class="batch-file-input" accept="image/png,application/pdf"
+                    style="font-size:0.75rem;" />
+                </div>
+              </div>
+              <button type="button" class="btn-remove-url" onclick="removeBatchRow(this)"
+                style="margin-top:2px;">✕</button>
             </div>
           </div>
           <button type="button" class="btn-add-url" onclick="addBatchRow()">
             ＋ Add Another URL
           </button>
-          <div style="margin-top:14px;">
-            <label>Shared Reference Image (Figma PNG)
-              <div class="file-upload-wrapper" id="drop-zone-batch" style="margin-top:6px;">
-                <input type="file" id="figma-batch" name="figma_png_batch" accept="image/png" />
-                <div class="file-upload-content">
-                  <span class="file-upload-icon">📂</span>
-                  <div id="file-text-batch" class="file-upload-text">Click or Drop shared reference PNG</div>
-                </div>
-              </div>
-            </label>
-          </div>
-          <p style="margin:8px 0 0;font-size:0.8rem;color:var(--muted);">💡 Each URL will run in sequence. Results shown
-            as a summary table.</p>
+
+          <p style="margin:16px 0 0;font-size:0.8rem;color:var(--muted);">💡 If you provide a Reference PNG/PDF on a
+            row, it overrides the saved baseline. Each URL runs in sequence.</p>
         </div>
 
         <!-- Component Focus Panel -->
@@ -1272,8 +1268,15 @@
       const list = document.getElementById('batch-url-list');
       const row = document.createElement('div');
       row.className = 'batch-url-row';
-      row.innerHTML = `<input type="url" class="batch-url-input" placeholder="https://staging.example.com/page" />
-        <button type="button" class="btn-remove-url" onclick="removeBatchRow(this)">✕</button>`;
+      row.style.alignItems = 'flex-start';
+      row.innerHTML = `<div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+          <input type="url" class="batch-url-input" placeholder="Stage URL (e.g. https://staging.example.com/page-x)" />
+          <div style="display:flex;align-items:center;padding:6px 10px;border:1px dashed var(--border);border-radius:6px;gap:8px;">
+            <span style="font-size:0.75rem;color:var(--muted);white-space:nowrap;">Reference (Optional)</span>
+            <input type="file" class="batch-file-input" accept="image/png,application/pdf" style="font-size:0.75rem;" />
+          </div>
+        </div>
+        <button type="button" class="btn-remove-url" onclick="removeBatchRow(this)" style="margin-top:2px;">✕</button>`;
       list.appendChild(row);
     }
     function removeBatchRow(btn) {
