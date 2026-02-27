@@ -653,13 +653,16 @@
                 <h4 style="margin:0 0 8px; color:#fbbf24;">🏷 Staging URL Detection (Priority Order)</h4>
                 <ol style="margin:0; padding-left:18px; color:var(--muted); font-size:.84rem; line-height:1.9;">
                     <li><strong style="color:#fbbf24;">PR Label</strong> — Add label
-                        <code>staging-url:https://pr-123.staging.example.com</code> to any PR</li>
+                        <code>staging-url:https://pr-123.staging.example.com</code> to any PR
+                    </li>
                     <li><strong style="color:#fbbf24;">STAGING_BASE_URL secret</strong> — Set in GitHub Secrets +
-                        <code>/pr-{number}</code> appended</li>
+                        <code>/pr-{number}</code> appended
+                    </li>
                     <li><strong style="color:#fbbf24;">STAGING_URL secret</strong> — Fixed staging URL used for all PRs
                     </li>
                     <li><strong style="color:#fbbf24;">Manual trigger</strong> — Enter URL in the CI Dashboard or
-                        <code>workflow_dispatch</code> input</li>
+                        <code>workflow_dispatch</code> input
+                    </li>
                 </ol>
             </div>
         </div>
@@ -746,7 +749,8 @@
                     <div class="gh-status-card" style="margin-top:16px;">
                         <h3>🏃 GitHub Actions</h3>
                         <p style="color:var(--muted);font-size:.83rem;margin:0 0 10px;">Workflow file:
-                            <code>.github/workflows/visual_tests.yml</code></p>
+                            <code>.github/workflows/visual_tests.yml</code>
+                        </p>
                         <div style="font-size:.8rem; color:var(--muted); line-height:1.9;">
                             <div>✅ Triggers on: <strong style="color:var(--fg);">PR open/update/reopen</strong></div>
                             <div>✅ Posts: <strong style="color:var(--fg);">commit status checks</strong></div>
@@ -918,9 +922,14 @@
       </div>
       <h4 style="margin:0 0 12px;font-size:.95rem;">🔍 URL Test Results</h4>
       ${testsHtml}
-      <button onclick="triggerSpecificPR(${prNumber},'${run.staging_url || ''}','${run.branch || ''}')" class="btn-secondary" style="margin-top:14px;font-size:13px;">
-        🔄 Re-run Tests
-      </button>
+      <div style="margin-top:20px;display:flex;gap:12px;">
+          <a href="/review?pr=${prNumber}" class="btn-approve" style="text-decoration:none;font-size:13px;padding:8px 16px;background:#6366f1;">
+            🔍 Open Build Review (Percy Mode)
+          </a>
+          <button onclick="triggerSpecificPR(${prNumber},'${run.staging_url || ''}','${run.branch || ''}')" class="btn-secondary" style="font-size:13px;">
+            🔄 Re-run Tests
+          </button>
+      </div>
     `;
             } catch (e) {
                 container.innerHTML = `<div style="color:var(--error);">Error: ${e.message}</div>`;

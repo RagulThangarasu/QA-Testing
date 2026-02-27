@@ -598,6 +598,10 @@ def upload_baseline_api():
 def index():
     return app.send_static_file("index.html")
 
+@app.get("/review")
+def review():
+    return app.send_static_file("build_review.html")
+
 # ── CI Config API ──────────────────────────────────────────────────────────
 
 CI_VISUAL_CONFIG_FILE = os.path.join(BASE_DIR, "ci_visual_config.json")

@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Build Review — Visual Testing Framework</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+        :root {
+            --review-sidebar-bg: #0f172a;
+            --review-main-bg: #0b0f19;
+            --review-accent: #6366f1;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background: var(--review-main-bg);
+            color: var(--fg);
+            font-family: 'Inter', sans-serif;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* ── Header ── */
+        .top-header {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            background: var(--review-sidebar-bg);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .btn-back {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--muted);
+            text-decoration: none;
+            font-size: .85rem;
+            font-weight: 500;
+        }
+
+        .btn-back:hover {
+            color: var(--fg);
+        }
+
+        .build-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .build-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .75rem;
+            color: var(--muted);
+            background: rgba(255, 255, 255, .05);
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .build-stats {
+            display: flex;
+            gap: 12px;
+            font-size: .8rem;
+            font-weight: 600;
+        }
+
+        .stat-pill {
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .05);
+            border: 1px solid rgba(255, 255, 255, .1);
+        }
+
+        .stat-pill.unreviewed {
+            color: var(--warning);
+            border-color: var(--warning);
+            background: rgba(245, 158, 11, .1);
+        }
+
+        .stat-pill.approved {
+            color: var(--success);
+            border-color: var(--success);
+            background: rgba(16, 185, 129, .1);
+        }
+
+        .stat-pill.rejected {
+            color: var(--error);
+            border-color: var(--error);
+            background: rgba(239, 68, 68, .1);
+        }
+
+        /* ── Main Workspace ── */
+        .workspace {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ── Sidebar (List of Snapshots) ── */
+        .sidebar {
+            width: 320px;
+            background: var(--review-sidebar-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sb-header {
+            padding: 14px 16px;
+            font-weight: 700;
+            font-size: .9rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--muted);
+        }
+
+        .snapshot-item {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: all .2s;
+        }
+
+        .snapshot-item:hover {
+            background: rgba(255, 255, 255, .03);
+        }
+
+        .snapshot-item.active {
+            background: rgba(99, 102, 241, .1);
+            border-left: 3px solid var(--review-accent);
+        }
+
+        .snapshot-item.approved .sn-title {
+            color: var(--success);
+        }
+
+        .snapshot-item.rejected .sn-title {
+            color: var(--error);
+        }
+
+        .sn-title {
+            font-weight: 600;
+            font-size: .88rem;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sn-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .7rem;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sn-diff-pill {
+            font-size: .68rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            background: rgba(239, 68, 68, .15);
+            color: #fca5a5;
+        }
+
+        .sn-diff-pill.clean {
+            background: rgba(16, 185, 129, .15);
+            color: #6ee7b7;
+        }
+
+        /* ── Main Review Area ── */
+        .review-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--review-main-bg);
+        }
+
+        .toolbar {
+            height: 54px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            background: rgba(15, 23, 42, .8);
+        }
+
+        .view-modes {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-mode {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            font-size: .8rem;
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-mode:hover {
+            border-color: var(--muted);
+            color: var(--fg);
+        }
+
+        .btn-mode.active {
+            background: rgba(255, 255, 255, .1);
+            border-color: var(--fg);
+            color: var(--fg);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-approve {
+            background: var(--success);
+            color: #fff;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: .85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-approve:hover {
+            background: #059669;
+        }
+
+        .btn-reject {
+            background: transparent;
+            border: 1px solid var(--error);
+            color: var(--error);
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: .85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-reject:hover {
+            background: rgba(239, 68, 68, .1);
+        }
+
+        /* ── Canvas ── */
+        .canvas-wrap {
+            flex: 1;
+            overflow: auto;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            position: relative;
+        }
+
+        /* Side-by-Side */
+        .view-sbs {
+            display: flex;
+            gap: 30px;
+            width: 100%;
+            max-width: 1800px;
+        }
+
+        .img-card {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .img-label {
+            font-size: .85rem;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+
+        .img-box {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+        }
+
+        .img-box img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        /* Overlay / Swipe */
+        .view-overlay {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .swipe-container {
+            position: relative;
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+            cursor: col-resize;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+        }
+
+        .swipe-container img {
+            display: block;
+            width: 100%;
+            height: auto;
+            pointer-events: none;
+        }
+
+        .swipe-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 50%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .swipe-overlay img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            min-width: 100%;
+            width: auto;
+            height: 100%;
+            object-fit: cover;
+            object-position: left top;
+        }
+
+        .swipe-handle {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            background: white;
+            z-index: 10;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .swipe-handle::after {
+            content: '';
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, .5);
+        }
+
+        /* Empty State */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--muted);
+        }
+
+        .empty-state h2 {
+            margin: 0 0 10px;
+            color: var(--fg);
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: .5;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--fg);
+            color: var(--bg);
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: .85rem;
+            opacity: 0;
+            transition: all .3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1000;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, .2);
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .toast.error {
+            background: var(--error);
+            color: #fff;
+        }
+
+        .loader-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--review-main-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(99, 102, 241, .2);
+            border-top-color: var(--review-accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-container" id="app">
+        <!-- Top Nav -->
+        <div class="top-header">
+            <div class="header-left">
+                <a href="/ci-dashboard" class="btn-back">⬅ Dashboard</a>
+                <div style="width:1px; height:24px; background:var(--border);"></div>
+                <div class="build-title" id="hd-title">Loading Build...</div>
+                <div class="build-meta" id="hd-meta">–</div>
+            </div>
+            <div class="header-right" id="hdr-stats">
+                <div class="build-stats">
+                    <div class="stat-pill unreviewed" id="stat-unrev">0 Unreviewed</div>
+                    <div class="stat-pill approved" id="stat-appr">0 Approved</div>
+                    <div class="stat-pill rejected" id="stat-rej">0 Rejected</div>
+                </div>
+                <div style="width:1px; height:24px; background:var(--border); margin-left:8px;"></div>
+                <button class="btn-approve" onclick="approveAll()"
+                    style="background:#059669; padding:6px 14px; font-size:.8rem;">✓ Approve All Unreviewed</button>
+            </div>
+        </div>
+
+        <div class="workspace">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sb-header">Snapshots in this Build</div>
+                <div id="snapshot-list" style="flex:1; overflow-y:auto;">
+                    <!-- Items generated purely from API -->
+                </div>
+            </div>
+
+            <!-- Review Area -->
+            <div class="review-area" id="review-area" style="display:none;">
+                <div class="toolbar">
+                    <div class="view-modes">
+                        <button class="btn-mode active" onclick="setMode('sbs', this)">Side-by-Side</button>
+                        <button class="btn-mode" onclick="setMode('swipe', this)">Swipe Compare</button>
+                        <button class="btn-mode" onclick="setMode('diff', this)">Overlay Diff</button>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="btn-reject" id="btn-rej-curr" onclick="rejectCurrent()">✕ Request
+                            Changes</button>
+                        <button class="btn-approve" id="btn-app-curr" onclick="approveCurrent()">✓ Approve</button>
+                    </div>
+                </div>
+
+                <div class="canvas-wrap" id="canvas-wrap">
+
+                    <!-- SIDE BY SIDE -->
+                    <div class="view-sbs" id="view-sbs">
+                        <div class="img-card">
+                            <div class="img-label">Baseline (Figma/Previous)</div>
+                            <div class="img-box"><img id="img-sbs-base" src="" alt="Baseline" /></div>
+                        </div>
+                        <div class="img-card">
+                            <div class="img-label">Current Stage</div>
+                            <div class="img-box"><img id="img-sbs-stage" src="" alt="Stage" /></div>
+                        </div>
+                    </div>
+
+                    <!-- SWIPE -->
+                    <div class="view-overlay" id="view-swipe" style="display:none;">
+                        <div class="swipe-container" id="swipe-container" onmousemove="handleSwipe(event)">
+                            <img id="img-swipe-stage" src="" alt="Stage" />
+                            <div class="swipe-overlay" id="swipe-overlay">
+                                <img id="img-swipe-base" src="" alt="Baseline" />
+                            </div>
+                            <div class="swipe-handle" id="swipe-handle"></div>
+                        </div>
+                    </div>
+
+                    <!-- DIFF -->
+                    <div class="view-overlay" id="view-diff" style="display:none;">
+                        <div class="img-card" style="width:100%;">
+                            <div class="img-label" style="text-align:center;">Difference Overlay (Red = Changes)</div>
+                            <div class="img-box"><img id="img-diff" src="" alt="Diff" /></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Empty State / Loading -->
+            <div class="review-area" id="empty-area">
+                <div class="empty-state">
+                    <div class="empty-icon">🔍</div>
+                    <h2>Select a snapshot to review</h2>
+                    <p>Pick an item from the sidebar to see detailed visual diffs.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="loader-overlay" id="loader">
+        <div class="spinner"></div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // ── STATE ──
+        let buildData = null;
+        let currentRun = null;
+        let jobsDetails = {};
+        let activeSnapshotId = null;
+        let viewMode = 'sbs';
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const prNumber = urlParams.get('pr');
+
+        // ── INIT ──
+        document.addEventListener("DOMContentLoaded", async () => {
+            if (!prNumber) {
+                document.getElementById("loader").style.display = "none";
+                document.getElementById("hd-title").textContent = "Error: No PR specified";
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/github/pr-runs/${prNumber}`);
+                if (!res.ok) throw new Error("Build not found");
+                currentRun = await res.json();
+
+                document.getElementById("hd-title").textContent = currentRun.title || `PR #${prNumber}`;
+                document.getElementById("hd-meta").textContent = (currentRun.sha || '').substring(0, 7);
+
+                await loadJobs(currentRun.job_ids || []);
+                renderSidebar();
+                document.getElementById("loader").style.display = "none";
+            } catch (err) {
+                console.error(err);
+                document.getElementById("loader").style.display = "none";
+                document.getElementById("hd-title").textContent = "Error loading build";
+                showToast(err.message, true);
+            }
+        });
+
+        async function loadJobs(jobIds) {
+            // Fetch detailed job states for all job_ids in the run
+            const promises = jobIds.map(id => fetch(`/api/status/${id}`).then(r => r.json()).catch(() => null));
+            const results = await Promise.all(promises);
+
+            results.forEach(d => {
+                if (d && d.job_id) jobsDetails[d.job_id] = d;
+            });
+        }
+
+        function renderSidebar() {
+            const list = document.getElementById("snapshot-list");
+            if (!currentRun.job_ids || currentRun.job_ids.length === 0) {
+                list.innerHTML = `<div style="padding:20px; color:var(--muted); text-align:center;">No snapshots in this build.</div>`;
+                return;
+            }
+
+            let unrev = 0, appr = 0, rej = 0;
+
+            list.innerHTML = currentRun.job_ids.map(jid => {
+                const job = jobsDetails[jid];
+                if (!job) return '';
+
+                const r = job.result || {};
+                const metrics = r.metrics || {};
+                const ssim = metrics.ssim !== undefined ? metrics.ssim : 1;
+                const diffPct = metrics.change_ratio !== undefined ? (metrics.change_ratio * 100).toFixed(1) : 0;
+                const passed = r.passed !== false; // passed by default or strict threshold
+
+                // Status resolution (Percy style: Unreviewed -> Approved -> Rejected)
+                // We check if the job obj in store has `review_status: 'approved'`
+                const status = job.review_status || (passed ? 'approved' : 'unreviewed');
+
+                let pillHtml = '';
+                if (diffPct > 0) pillHtml = `<span class="sn-diff-pill">Δ ${diffPct}%</span>`;
+                else pillHtml = `<span class="sn-diff-pill clean">✓ Match</span>`;
+
+                if (status === 'unreviewed') unrev++;
+                else if (status === 'approved') appr++;
+                else if (status === 'rejected') rej++;
+
+                return `
+      <div class="snapshot-item ${status} ${activeSnapshotId === jid ? 'active' : ''}" onclick="selectSnapshot('${jid}')" id="sn-${jid}">
+        <div class="sn-title">
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${job.stage_url}">${new URL(job.stage_url || 'http://a').pathname || 'Snapshot'}</span>
+          ${pillHtml}
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sn-meta">${jid.substring(0, 8)} · ${status.toUpperCase()}</div>
+        </div>
+      </div>
+    `;
+            }).join('');
+
+            document.getElementById("stat-unrev").textContent = `${unrev} Unreviewed`;
+            document.getElementById("stat-appr").textContent = `${appr} Approved`;
+            document.getElementById("stat-rej").textContent = `${rej} Rejected`;
+        }
+
+        function selectSnapshot(jobId) {
+            activeSnapshotId = jobId;
+            renderSidebar(); // update active state
+
+            const job = jobsDetails[jobId];
+            if (!job || !job.result) return;
+
+            document.getElementById("empty-area").style.display = "none";
+            document.getElementById("review-area").style.display = "flex";
+
+            const root = window.location.origin;
+            const baseImg = `${root}/download/${job.job_id}/figma.png`;
+            const stageImg = `${root}/download/${job.job_id}/stage.png`;
+            const diffImg = `${root}/download/${job.job_id}/diff_overlay.png`;
+
+            document.getElementById("img-sbs-base").src = baseImg;
+            document.getElementById("img-sbs-stage").src = stageImg;
+
+            document.getElementById("img-swipe-base").src = baseImg;
+            document.getElementById("img-swipe-stage").src = stageImg;
+
+            document.getElementById("img-diff").src = diffImg;
+
+            // Update action buttons state
+            const status = job.review_status || (job.result.passed ? 'approved' : 'unreviewed');
+            const btnApp = document.getElementById("btn-app-curr");
+            const btnRej = document.getElementById("btn-rej-curr");
+
+            btnApp.textContent = status === 'approved' ? '✓ Approved' : '✓ Approve';
+            btnApp.style.opacity = status === 'approved' ? '0.5' : '1';
+
+            btnRej.textContent = status === 'rejected' ? '✕ Changes Requested' : '✕ Request Changes';
+            btnRej.style.opacity = status === 'rejected' ? '0.5' : '1';
+        }
+
+        function setMode(mode, btnEl) {
+            viewMode = mode;
+            document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
+            btnEl.classList.add('active');
+
+            document.getElementById('view-sbs').style.display = mode === 'sbs' ? 'flex' : 'none';
+            document.getElementById('view-swipe').style.display = mode === 'swipe' ? 'flex' : 'none';
+            document.getElementById('view-diff').style.display = mode === 'diff' ? 'flex' : 'none';
+        }
+
+        function handleSwipe(e) {
+            if (viewMode !== 'swipe') return;
+            const container = document.getElementById('swipe-container');
+            const overlay = document.getElementById('swipe-overlay');
+            const handle = document.getElementById('swipe-handle');
+
+            const rect = container.getBoundingClientRect();
+            let x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+            let pct = (x / rect.width) * 100;
+
+            overlay.style.width = `${pct}%`;
+            handle.style.left = `${pct}%`;
+
+            // ensure hidden image scales correctly
+            const imgBase = document.getElementById('img-swipe-base');
+            imgBase.style.width = `${rect.width}px`;
+        }
+
+        // ── ACTIONS ──
+
+        function showToast(msg, isError = false) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `toast show ${isError ? 'error' : ''}`;
+            setTimeout(() => t.className = 'toast', 3000);
+        }
+
+        async function approveCurrent() {
+            if (!activeSnapshotId) return;
+            try {
+                const res = await fetch(`/api/job/${activeSnapshotId}/approve`, { method: 'POST' });
+                if (!res.ok) throw new Error("Network error");
+
+                // update local state
+                jobsDetails[activeSnapshotId].review_status = 'approved';
+                renderSidebar();
+                selectSnapshot(activeSnapshotId);
+                showToast("Snapshot Approved & Baseline Updated!");
+            } catch (err) {
+                showToast("Failed to approve: " + err.message, true);
+            }
+        }
+
+        async function rejectCurrent() {
+            if (!activeSnapshotId) return;
+            try {
+                const res = await fetch(`/api/job/${activeSnapshotId}/reject`, { method: 'POST' });
+                if (!res.ok) throw new Error("Network error");
+
+                jobsDetails[activeSnapshotId].review_status = 'rejected';
+                renderSidebar();
+                selectSnapshot(activeSnapshotId);
+                showToast("Changes requested for this snapshot.");
+            } catch (err) {
+                showToast("Failed to reject: " + err.message, true);
+            }
+        }
+
+        async function approveAll() {
+            if (!currentRun || !currentRun.job_ids) return;
+            const unreviewedIds = currentRun.job_ids.filter(id => {
+                const st = jobsDetails[id]?.review_status || (jobsDetails[id]?.result?.passed ? 'approved' : 'unreviewed');
+                return st === 'unreviewed';
+            });
+
+            if (unreviewedIds.length === 0) {
+                showToast("No unreviewed snapshots remaining.");
+                return;
+            }
+
+            for (const id of unreviewedIds) {
+                try {
+                    await fetch(`/api/job/${id}/approve`, { method: 'POST' });
+                    jobsDetails[id].review_status = 'approved';
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+            renderSidebar();
+            if (activeSnapshotId) selectSnapshot(activeSnapshotId);
+            showToast(`${unreviewedIds.length} snapshots approved!`);
+        }
+
+    </script>
+</body>
+
+</html>
