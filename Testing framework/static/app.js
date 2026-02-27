@@ -435,14 +435,11 @@ async function renderResults(results, jobId) {
       <img src="${results.outputs.figma_png}" alt="Reference" loading="lazy"/>
     </figure>
     <figure>
-      <figcaption>🌡 Diff Heatmap</figcaption>
-      <img src="${results.outputs.diff_heatmap}" alt="Heatmap" loading="lazy"/>
-    </figure>
-    <figure>
       <figcaption>🔴 Diff Overlay (${results.metrics.num_regions} issues)</figcaption>
       <img src="${results.outputs.diff_overlay}" alt="Overlay" loading="lazy"/>
     </figure>
   `;
+
 
   // Issues
   renderIssues(results.metrics.issues, results, jobId);

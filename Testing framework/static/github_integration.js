@@ -101,7 +101,6 @@ window.openGitHubReport = function (jobId, filename, label, description) {
 - Job ID: \`${jobId}\`
 - File: \`${filename}\`
 - Diff Overlay: ${window.location.origin}/download/${jobId}/diff_overlay.png
-- Heatmap: ${window.location.origin}/download/${jobId}/diff_heatmap.png
 - PDF Report: ${window.location.origin}/download/${jobId}/report.pdf
 
 _Reported automatically by QA Visual Testing Framework_`;
