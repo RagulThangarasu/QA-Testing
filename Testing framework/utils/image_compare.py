@@ -42,6 +42,18 @@ def _read_png_as_bgr(path):
     return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
 
+def _crop_or_pad(target_img, template_shape):
+    th, tw = template_shape[:2]
+    sh, sw = target_img.shape[:2]
+    
+    out = np.full((th, tw, 3), 255, dtype=np.uint8)
+    
+    mh = min(th, sh)
+    mw = min(tw, sw)
+    
+    out[0:mh, 0:mw] = target_img[0:mh, 0:mw]
+    return out
+
 def _align_orb(template_bgr, target_bgr):
     template_gray = cv2.cvtColor(template_bgr, cv2.COLOR_BGR2GRAY)
     target_gray = cv2.cvtColor(target_bgr, cv2.COLOR_BGR2GRAY)
@@ -51,7 +63,7 @@ def _align_orb(template_bgr, target_bgr):
     kps2, des2 = orb.detectAndCompute(target_gray, None)
 
     if des1 is None or des2 is None or len(kps1) < 10 or len(kps2) < 10:
-        return cv2.resize(target_bgr, (template_bgr.shape[1], template_bgr.shape[0])), None
+        return _crop_or_pad(target_bgr, template_bgr.shape), None
 
     bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
     matches = bf.knnMatch(des1, des2, k=2)
@@ -62,7 +74,7 @@ def _align_orb(template_bgr, target_bgr):
             good.append(m)
 
     if len(good) < 8:
-        return cv2.resize(target_bgr, (template_bgr.shape[1], template_bgr.shape[0])), None
+        return _crop_or_pad(target_bgr, template_bgr.shape), None
 
     src_pts = np.float32([kps1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
     dst_pts = np.float32([kps2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
@@ -72,7 +84,7 @@ def _align_orb(template_bgr, target_bgr):
     M, mask = cv2.estimateAffinePartial2D(dst_pts, src_pts, method=cv2.RANSAC, ransacReprojThreshold=5.0)
     
     if M is None:
-         return cv2.resize(target_bgr, (template_bgr.shape[1], template_bgr.shape[0])), None
+         return _crop_or_pad(target_bgr, template_bgr.shape), None
 
     # Force Rotation to 0 (Web screenshots are never rotated)
     # M = [[alpha, beta, tx], [-beta, alpha, ty]] where alpha=scale*cos, beta=scale*sin
@@ -84,8 +96,8 @@ def _align_orb(template_bgr, target_bgr):
     
     # Sanity check on scale (should be close to 1.0 for screenshots)
     if scale < 0.9 or scale > 1.1:
-        # Detected bad scaling -> Fallback to resize without alignment
-        return cv2.resize(target_bgr, (template_bgr.shape[1], template_bgr.shape[0])), None
+        # Detected bad scaling -> Fallback to crop/pad without alignment
+        return _crop_or_pad(target_bgr, template_bgr.shape), None
         
     # Reconstruct M with 0 rotation
     M[0,0] = scale
@@ -94,7 +106,7 @@ def _align_orb(template_bgr, target_bgr):
     M[1,1] = scale
     # Keep tx, ty as is (M[0,2], M[1,2])
 
-    aligned = cv2.warpAffine(target_bgr, M, (template_bgr.shape[1], template_bgr.shape[0]), flags=cv2.INTER_LINEAR)
+    aligned = cv2.warpAffine(target_bgr, M, (template_bgr.shape[1], template_bgr.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
     return aligned, M
 
 
